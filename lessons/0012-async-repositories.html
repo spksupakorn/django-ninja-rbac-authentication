@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 12 — Async repositories</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 12 · 15 minutes</p>
+    <h1>Repository คือขอบเขตของ database</h1>
+    <p class="lede">เมื่อ endpoint เป็น <code>async def</code>, database query เป็น I/O ที่ต้องรอ. โปรเจกต์นี้รวม query ไว้ใน repository และใช้ async ORM methods เพื่อให้ service ไม่ต้องรู้รายละเอียดนั้น</p>
+
+    <h2>ตัวอย่าง repository</h2>
+    <pre><code>class AccountsRepository:
+    async def aget_by_email(self, email: str) -> User | None:
+        return await User.objects.filter(email=email).afirst()
+
+class AuthzRepository:
+    async def acreate_permission(self, code: str) -> Permission:
+        return await Permission.objects.acreate(code=code)</code></pre>
+    <p>ชื่อขึ้นต้น <code>a</code> ช่วยสื่อว่า method เป็น async และ caller ต้องใช้ <code>await</code>. การออกแบบจริงอาจใช้ method names ต่างกันได้ แต่ responsibility ยังอยู่ที่ repository เดียวกัน</p>
+    <div class="callout"><strong>ข้อยกเว้นของ User:</strong> repository ไม่ควรสร้าง User ด้วย <code>acreate(password=raw_password)</code>; M1 ใช้ <code>UserManager.create_user()</code> เพื่อ hash password ก่อนบันทึก</div>
+
+    <h2><code>filter()</code> ยังไม่ query เสมอไป</h2>
+    <pre><code>queryset = User.objects.filter(email=email)  # สร้างคำอธิบาย query
+user = await queryset.afirst()               # ตรงนี้จึง query database</code></pre>
+    <p>QuerySet เป็น lazy: <code>filter()</code> สร้างแผนว่าจะหาอะไร แต่ operation ที่ต้องอ่าน/เขียน database เช่น <code>aget()</code>, <code>afirst()</code>, <code>acreate()</code> คือจุดที่ต้อง await ใน async code</p>
+
+    <h2>Sync กับ async ORM</h2>
+    <div class="card">
+      <p><strong>Sync:</strong> <code>User.objects.get(email=email)</code></p>
+      <p><strong>Async:</strong> <code>await User.objects.aget(email=email)</code></p>
+    </div>
+    <p>หากเรียก sync ORM ที่ execute ใน async context Django อาจ raise <code>SynchronousOnlyOperation</code>; ถึงบางกรณีจะไม่ error ก็เสี่ยง block event loop. เราจึงใช้ async variant ตาม ADR 0005</p>
+
+    <h2>Base repository ช่วยอะไร?</h2>
+    <pre><code>class BaseAsyncRepository:
+    async def aget_or_none(...): ...
+    async def acreate(...): ...
+
+class AccountsRepository(BaseAsyncRepository): ...
+class AuthzRepository(BaseAsyncRepository): ...</code></pre>
+    <p>method ทั่วไปอยู่ใน base class เพื่อลด code ซ้ำ; query ที่เฉพาะ domain เช่น “หา user ด้วย email” อยู่ใน repository ของ app นั้น</p>
+
+    <h2>เส้นทางจาก service</h2>
+    <pre><code># service ใช้ภาษาของ business use case
+user = await accounts_repository.aget_by_email(email)
+if user is None:
+    raise InvalidCredentials</code></pre>
+    <p>Service ไม่ต้องรู้ว่าใช้ PostgreSQL, QuerySet หรือ filter อย่างไร; repository เป็นคนแปลความต้องการ “หา user ด้วย email” เป็น ORM query</p>
+
+    <div class="quiz" data-quiz data-correct="A" data-success="ถูกต้อง — aget() เป็น async operation ที่ต้อง await เพื่อได้ผล query" data-retry="ลองใหม่: เลือก operation ที่ execute query และเป็น async variant">
+      <strong>Quiz: ใน async repository วิธีใดเหมาะสำหรับหา User หนึ่งคนจาก email?</strong>
+      <p class="muted">A = await User.objects.aget(...) · B = User.objects.get(...) · C = await User.objects.filter(...)</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>เหตุใด <code>User.objects.filter(email=email)</code> จึงยังไม่ต้อง <code>await</code> แต่ <code>await queryset.afirst()</code> ต้องใช้? ตอบโดยแยกว่าแต่ละบรรทัดทำงานกับ database หรือยัง</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/async/">Django async support (official docs)</a> และ <a href="../docs/adr/0005-async-runtime-and-tooling.md">ADR 0005 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/async-repository.html">reference: async repository</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะต่อด้วย domain exceptions และ HTTP error mapping ใน M3 ครับ</footer>
+  </main>
+</body>
+</html>

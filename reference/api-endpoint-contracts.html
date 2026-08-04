@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — API endpoint contracts</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>M7 endpoint contracts</h1>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Use case</th><th>Auth</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /auth/register</code></td><td>register</td><td>public</td></tr>
+        <tr><td><code>POST /auth/login</code></td><td>login</td><td>public + throttle</td></tr>
+        <tr><td><code>POST /auth/refresh</code></td><td>refresh</td><td>public + throttle</td></tr>
+        <tr><td><code>POST /auth/logout</code></td><td>logout</td><td>refresh credential</td></tr>
+        <tr><td><code>GET /auth/me</code></td><td>current principal</td><td>access token</td></tr>
+        <tr><td><code>/admin/*</code></td><td>user/role administration</td><td>access + permission</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Schema rule:</strong> validate input; expose only deliberate output fields; never include password hashes.</p>
+  </main>
+</body>
+</html>

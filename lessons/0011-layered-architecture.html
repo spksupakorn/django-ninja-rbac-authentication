@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 11 — Layered architecture</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 11 · 15 minutes</p>
+    <h1>ทำไม router ไม่ควร query database?</h1>
+    <p class="lede">โปรเจกต์นี้แยก API, service, repository และ model เพื่อให้ HTTP, business rules และ database เปลี่ยนได้โดยไม่พันกัน. โดยเฉพาะ async ORM จะถูกควบคุมไว้ในที่เดียว</p>
+
+    <h2>สี่ชั้นและขอบเขต</h2>
+    <div class="flow">
+      <div><strong>API</strong> — รับ HTTP, validate input, เรียก service, ส่ง HTTP response</div>
+      <div><strong>Service</strong> — ทำ use case และ business rule; ไม่รู้จัก request/response</div>
+      <div><strong>Repository</strong> — เขียน async ORM query; ซ่อนรายละเอียด database</div>
+      <div><strong>Model</strong> — นิยาม table, fields และ relationships</div>
+    </div>
+
+    <h2>ตัวอย่าง: login ในอนาคต</h2>
+    <pre><code>POST /auth/login
+  ↓
+API router รับ JSON และ validate schema
+  ↓
+AuthService.login(email, password)
+  ↓
+AccountsRepository.aget_by_email(email)
+  ↓
+User model / PostgreSQL</code></pre>
+    <p>ผลลัพธ์วิ่งกลับขึ้นเป็นลำดับย้อนกลับ: repository คืน User → service ตรวจ password/สร้าง tokens → API ส่ง JSON response</p>
+
+    <h2>กฎที่ป้องกันโค้ดพันกัน</h2>
+    <div class="card">
+      <p><strong>Router ไม่แตะ ORM:</strong> ไม่มี <code>User.objects.filter(...)</code> ใน endpoint</p>
+      <p><strong>Service ไม่แตะ HTTP:</strong> ไม่มี <code>request</code>, status code หรือ Ninja response ใน business logic</p>
+      <p><strong>Repository แตะ ORM ที่เดียว:</strong> query เช่น <code>aget()</code>, <code>acreate()</code> อยู่ที่นี่</p>
+    </div>
+    <p>เช่น service login test ได้โดยส่ง email/password ธรรมดาเข้าไป โดยไม่ต้องจำลอง HTTP request; repository test ได้แยกจาก business rule</p>
+
+    <h2>ทำไม repository ต้องเป็น async?</h2>
+    <pre><code># แนวคิดใน M3
+user = await User.objects.aget(email=email)
+new_user = await User.objects.acreate(email=email)</code></pre>
+    <p>endpoint ของโปรเจกต์เป็น <code>async def</code>. การใช้ async ORM methods ใน repository ลดความเสี่ยงที่ query sync จะ block event loop หรือทำให้เกิด <code>SynchronousOnlyOperation</code></p>
+    <div class="callout"><strong>หมายเหตุ:</strong> password hashing เป็นงาน CPU-bound ไม่ใช่ ORM; M4 จะห่อมันด้วย <code>sync_to_async(..., thread_sensitive=False)</code> ใน service. นั่นก็เป็นเหตุผลที่ขอบเขตแต่ละชั้นช่วยให้เห็นงานผิดประเภทได้ง่าย</div>
+
+    <h2>Domain exception เดินขึ้นไปอย่างไร?</h2>
+    <pre><code>repository: ไม่พบ User
+  ↓
+service: raise InvalidCredentials
+  ↓
+API exception handler: map เป็น HTTP 401</code></pre>
+    <p>service บอกเพียงความหมายทางธุรกิจ ไม่ผูกกับ HTTP. API layer จึงเป็นจุดเดียวที่ตัดสินว่า error ใดตอบ 401, 403 หรือ 409</p>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — repository เป็นที่เดียวที่ควรมี ORM query ตาม ADR ของโปรเจกต์" data-retry="ลองใหม่: มองหาชั้นที่รับผิดชอบ data access โดยเฉพาะ">
+      <strong>Quiz: Query <code>User.objects.aget(...)</code> ควรอยู่ชั้นใด?</strong>
+      <p class="muted">A = API router · B = repository · C = service</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>ถ้า endpoint ต้องตอบ HTTP 403 เพราะ user ไม่มีสิทธิ์ เหตุใด service จึงควร raise domain error เช่น <code>PermissionDenied</code> แทนการคืน Ninja response เอง?</p>
+
+    <p>แหล่งหลัก: <a href="../docs/adr/0003-layered-architecture.md">ADR 0003 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/layered-architecture.html">reference: layered architecture</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะลงรายละเอียด repository, domain exceptions และ async boundary ใน M3 ต่อครับ</footer>
+  </main>
+</body>
+</html>

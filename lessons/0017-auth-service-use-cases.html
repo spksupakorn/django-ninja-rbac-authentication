@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 17 — AuthService use cases</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 17 · 15 minutes</p>
+    <h1>AuthService คือผู้ประสาน auth flow</h1>
+    <p class="lede">Router รับ HTTP; repository ทำ database I/O; แต่ use case ที่ต้องตัดสินใจและเรียงหลายขั้นตอนอยู่ใน <code>AuthService</code>. นี่คือที่ที่ register, login, refresh และ logout มีความหมายทางธุรกิจครบถ้วน</p>
+
+    <h2>1. Register</h2>
+    <pre><code>register(email, password)
+  → ตรวจว่า email ยังไม่ซ้ำ
+  → UserManager.create_user()  # hash password
+  → หา default role: "user"
+  → สร้าง UserRole(user, role)
+  → คืนผลลัพธ์ที่ปลอดภัย</code></pre>
+    <p>Register ไม่ควรให้ client เลือก <code>admin</code> เอง. Policy บอกว่า user ใหม่ได้ <code>DEFAULT_USER_ROLE = "user"</code>; นี่คือการเชื่อม custom User จาก M1 เข้ากับ RBAC จาก M2</p>
+
+    <h2>2. Login</h2>
+    <pre><code>login(email, password)
+  → repository หา user จาก email
+  → verify password (หรือ dummy verify หากไม่พบ user)
+  → resolve roles/perms
+  → ออก access token
+  → สร้าง refresh family + hash ของ raw refresh token ใน DB
+  → คืน access + raw refresh token</code></pre>
+    <p>ถ้าหา user ไม่พบหรือ password ไม่ถูก service raise <code>InvalidCredentials</code> เดียวกัน. Access token มี snapshot ของ roles/perms; refresh record มี state สำหรับ rotation ใน database</p>
+
+    <h2>3. Refresh</h2>
+    <pre><code>refresh(raw_refresh)
+  → hash raw token แล้วหา RefreshToken record
+  → ตรวจ expiry และ revoked_at
+  → ถ้า revoked: revoke ทั้ง family, raise TokenReused
+  → ถ้ายัง valid: revoke token เดิม
+  → ออก access ใหม่ + refresh ใหม่ใน family เดิม
+  → คืน token pair ใหม่</code></pre>
+    <p>นี่คือจุดที่ rotation และ reuse detection จาก Lesson 16 กลายเป็น code path จริง</p>
+
+    <h2>4. Logout</h2>
+    <pre><code>logout(raw_refresh)
+  → hash raw token แล้วหา record
+  → ตั้ง revoked_at
+  → return success</code></pre>
+    <p>Logout revoke refresh token เพื่อไม่ให้ขอ access tokens ใหม่ได้. Access token ที่ออกไปแล้วจะหมดอายุตาม TTL สั้นของมัน</p>
+
+    <h2>Service เรียกอะไรบ้าง?</h2>
+    <div class="flow">
+      <div>AccountsRepository: หา user</div>
+      <div>AuthzRepository: หา default role, assign role, resolve perms</div>
+      <div>Password wrapper: hash/verify แบบไม่ block event loop</div>
+      <div>JWT module: encode/decode access token</div>
+      <div>RefreshToken repository: persist/revoke/rotate tokens</div>
+    </div>
+    <p>Service ไม่ควรเรียก <code>request</code>, ไม่ควรสร้าง HTTP response, และไม่ควรเขียน ORM query ตรง ๆ</p>
+
+    <h2>ตัวอย่างที่ผิดขอบเขต</h2>
+    <pre><code># API router ไม่ควรทำทั้งหมดนี้เอง
+user = await User.objects.aget(email=input.email)
+if not user.check_password(input.password):
+    return 401
+# ... สร้าง JWT และ RefreshToken ต่อ</code></pre>
+    <p>โค้ดแบบนี้ผสม HTTP, ORM, password และ token policy ในจุดเดียว จึง test และเปลี่ยนยาก. Router ที่ดีควรมีหน้าที่สั้น: validate input → await service → serialize result</p>
+
+    <div class="quiz" data-quiz data-correct="C" data-success="ถูกต้อง — register ต้อง assign default user role; client ไม่ควรเลือก admin role ด้วยตัวเอง" data-retry="ลองใหม่: มองหา policy ที่ช่วยให้ user ใหม่มีสิทธิ์ขั้นต่ำและไม่ยกระดับสิทธิ์ด้วย input">
+      <strong>Quiz: หลัง register สำเร็จ AuthService ควร assign role ใด?</strong>
+      <p class="muted">A = role จาก client · B = admin · C = DEFAULT_USER_ROLE</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>ทำไม client ไม่ควรส่ง role เช่น <code>admin</code> มากับ register request แล้วให้ AuthService assign ตรง ๆ?</p>
+
+    <p>แหล่งหลัก: <a href="../docs/adr/0002-jwt-auth-strategy.md">ADR 0002</a> และ <a href="../docs/adr/0003-layered-architecture.md">ADR 0003</a> ของโปรเจกต์</p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/auth-service-use-cases.html">reference: AuthService use cases</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะไป M6: JWT auth guard, request principal และ permission enforcement ครับ</footer>
+  </main>
+</body>
+</html>

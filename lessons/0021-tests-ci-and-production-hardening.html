@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 21 — Tests, CI และ production hardening</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 21 · 18 minutes</p>
+    <h1>เมื่อไร feature จึง “เสร็จ”?</h1>
+    <p class="lede">Phase 1 ไม่จบเมื่อ endpoint ตอบ 200 บนเครื่องเรา แต่จบเมื่อ behavior สำคัญมี test, code ผ่าน quality checks ใน CI และ production settings ไม่เปิดช่องโหว่พื้นฐาน</p>
+
+    <h2>1. Unit tests: ตรวจ logic เป็นชิ้นเล็ก</h2>
+    <pre><code>tests/unit/
+  test_passwords.py
+  test_jwt.py
+  test_auth_service.py</code></pre>
+    <p>Unit test เรียก function/service โดยตรงและเน้น cases ที่มีความเสี่ยงสูง:</p>
+    <ul>
+      <li>password hash แล้ว verify ถูก/ผิด</li>
+      <li>JWT encode/decode, token หมดอายุ, token ถูกแก้</li>
+      <li>refresh rotation happy path และ reuse detection revoke ทั้ง family</li>
+      <li>register assign default role, login ผิดตอบ domain error เดียว</li>
+    </ul>
+    <p>แผนตั้งเป้า service coverage อย่างน้อย 90% เพราะ service เก็บ policy สำคัญที่สุด</p>
+
+    <h2>2. Integration tests: ตรวจส่วนที่ต่อกัน</h2>
+    <pre><code>tests/integration/
+  test_auth_endpoints.py
+  test_admin_permissions.py</code></pre>
+    <p>Integration test ยิง HTTP request ผ่าน API จริงและใช้ test database. มันพิสูจน์ว่า routing, schemas, auth guard, exception handler และ repository เชื่อมกันถูกต้อง—not just function เดี่ยว ๆ</p>
+    <pre><code>ไม่มี token            → 401
+token valid ไม่มี perm → 403
+เกิน throttle          → 429
+register → login → admin request → behavior ตาม permission</code></pre>
+
+    <h2>3. Factories: สร้าง test data ที่มีความหมาย</h2>
+    <pre><code>user = UserFactory()
+admin = UserFactory()
+RolePermissionFactory(role=admin_role, permission=USERS_READ)</code></pre>
+    <p><code>factory-boy</code> ช่วยสร้าง User/Role/Permission relationships โดยไม่ต้อง copy-paste setup ยาว ๆ ในทุก test. Test จึงอ่านว่า “กำลังพิสูจน์อะไร” มากกว่า “กำลังเตรียม database อย่างไร”</p>
+
+    <h2>4. CI คือเครื่องตรวจซ้ำที่ไม่ลืม</h2>
+    <pre><code>uv run ruff check .
+uv run mypy
+uv run pytest</code></pre>
+    <div class="card">
+      <p><strong>Ruff:</strong> syntax, common bugs และ style</p>
+      <p><strong>mypy:</strong> ความสอดคล้องของ type hints</p>
+      <p><strong>pytest:</strong> behavior ที่เราตั้งใจให้ระบบทำ</p>
+    </div>
+    <p>CI รันชุดเดียวกันทุก pull request/commit เพื่อไม่ให้คุณภาพขึ้นกับว่าใครจำรันคำสั่งก่อน merge ได้หรือไม่</p>
+
+    <h2>5. Production settings ต้องเข้มกว่า dev</h2>
+    <pre><code># config/settings/prod.py
+DEBUG = False
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_HSTS_SECONDS = 31_536_000</code></pre>
+    <ul>
+      <li><code>DEBUG=False</code>: ไม่ส่ง debug traceback/config ที่ละเอียดให้ client</li>
+      <li><code>ALLOWED_HOSTS</code>: จำกัด host headers ที่ Django ยอมรับ</li>
+      <li>secure cookies/HTTPS redirect/HSTS: ลดการส่ง credential ผ่าน HTTP และบังคับ HTTPS behavior</li>
+    </ul>
+    <div class="callout"><strong>หลัก:</strong> dev settings ทำให้พัฒนาได้สะดวก; prod settings ลด attack surface. อย่าใช้ค่า `.env.example` หรือ JWT secret ตัวอย่างใน deployment จริง</div>
+
+    <h2>Definition of done ของ M8</h2>
+    <div class="flow">
+      <div>unit + integration tests เขียว</div>
+      <div>factory data ทำให้ test setup maintain ได้</div>
+      <div>ruff + mypy + pytest ผ่านใน CI</div>
+      <div>README บอกวิธีรัน/ตั้งค่า/test</div>
+      <div>prod.py มี secure defaults</div>
+    </div>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — integration test ใช้เพื่อพิสูจน์ว่าส่วนต่าง ๆ ต่อกันจริงผ่าน HTTP, guards และ database" data-retry="ลองใหม่: เลือกชนิด test ที่ทดสอบการเชื่อมกันของหลายชั้น ไม่ใช่ function เดี่ยว">
+      <strong>Quiz: Test ประเภทใดเหมาะกับการพิสูจน์ว่า token ไม่มี permission แล้ว endpoint ตอบ 403?</strong>
+      <p class="muted">A = unit test JWT only · B = integration test endpoint · C = ruff check</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองสรุป Phase 1</h2>
+    <p>เลือกหนึ่ง flow: <code>register → login → protected endpoint</code>. ลองอธิบายว่าชั้นใดรับผิดชอบแต่ละจุด: schema/router, service, repository, password/JWT, guard และ test</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/testing/overview/">Django testing overview</a> และ <a href="https://docs.pytest.org/">pytest documentation</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/testing-ci-and-production.html">reference: testing, CI and production</a></p>
+    <footer>นี่คือบทสุดท้ายของ roadmap เชิงแนวคิด Phase 1. ส่งคำตอบสรุปมาได้เลย แล้วผมจะช่วยตรวจ mental model และพาเปลี่ยนจาก learning ไป implementation ทีละ milestone เมื่อคุณพร้อมครับ</footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 16 — Access, refresh, rotation และ reuse detection</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 16 · 18 minutes</p>
+    <h1>ทำไมต้องมี token สองชนิด?</h1>
+    <p class="lede">Access token ต้องอายุสั้นเพราะถูกส่งบ่อย; refresh token อยู่ได้นานกว่าเพื่อขอ access token ใหม่โดยไม่ต้องให้ผู้ใช้ใส่ password ทุก 15 นาที. ความเสี่ยงของ refresh token จึงต้องควบคุมเข้มกว่า</p>
+
+    <h2>Access vs refresh</h2>
+    <div class="card">
+      <p><strong>Access token:</strong> JWT ที่ signed, อายุ 15 นาที, ส่งใน <code>Authorization: Bearer ...</code>, มี roles/perms snapshot สำหรับ guard</p>
+      <p><strong>Refresh token:</strong> credential อายุ 7 วัน, ใช้เฉพาะขอคู่ token ใหม่, มี state ใน database เพื่อ revoke และตรวจ reuse</p>
+    </div>
+    <p>Access token ออกแบบให้ตรวจ signature/expiration ได้เร็ว. Refresh token ต้อง query database เพราะต้องรู้ว่าถูก revoke ไปหรือยัง</p>
+
+    <h2>RefreshToken model เก็บอะไร?</h2>
+    <pre><code>RefreshToken
+  user
+  token_hash
+  family_id
+  parent_id
+  expires_at
+  revoked_at</code></pre>
+    <ul>
+      <li><code>token_hash</code>: hash ของ raw refresh token; database ไม่เก็บ raw token</li>
+      <li><code>family_id</code>: กลุ่ม tokens ที่เริ่มจาก login session เดียวกัน</li>
+      <li><code>parent_id</code>: token ก่อนหน้าที่ถูก rotate มาเป็น token นี้</li>
+      <li><code>revoked_at</code>: มีค่าเมื่อ token ใช้ต่อไม่ได้แล้ว</li>
+    </ul>
+
+    <h2>Login สร้าง family ใหม่</h2>
+    <pre><code>login สำเร็จ
+  → access token A1
+  → refresh token R1
+  → family F1
+  → database เก็บ hash(R1), family=F1, revoked_at=None</code></pre>
+    <p>หนึ่ง login session มี family ของตัวเอง จึง revoke แยก session ได้ในอนาคต</p>
+
+    <h2>Rotation: refresh ที่ถูกต้อง</h2>
+    <pre><code>client ส่ง R1
+  → DB พบ hash(R1), ยังไม่หมดอายุ, ยังไม่ revoked
+  → revoke R1
+  → ออก access A2 + refresh R2
+  → DB เก็บ hash(R2), family=F1, parent=R1</code></pre>
+    <p>หลัง rotation, R1 ใช้ซ้ำไม่ได้. Client ต้องแทนที่ refresh token เก่าด้วย R2 เสมอ</p>
+
+    <h2>Reuse detection: refresh เก่าถูกส่งอีกครั้ง</h2>
+    <pre><code>attacker หรือ client เก่าส่ง R1 อีกครั้ง
+  → DB พบ R1 แต่ revoked แล้ว
+  → ถือว่า token reuse
+  → revoke tokens ทั้ง family F1
+  → response ล้มเหลว; ต้อง login ใหม่</code></pre>
+    <div class="callout"><strong>เหตุผล:</strong> server แยกไม่ออกว่าใครเป็นเจ้าของ R1 ที่แท้จริง. การ revoke ทั้ง family จำกัดความเสียหายหาก token เก่าถูกขโมย แม้จะทำให้ session ปัจจุบันที่ใช้ R2 ต้อง login ใหม่ด้วย</div>
+
+    <h2>Logout ทำอะไร?</h2>
+    <p>Logout รับ raw refresh token, หา record ด้วย hash แล้วตั้ง <code>revoked_at</code> ของ token นั้น. Access token อาจใช้ได้จนหมดอายุตามธรรมชาติ (สูงสุด 15 นาที) เพราะเป็น signed token ที่ไม่ได้ query database ทุก request</p>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — token เก่าที่ถูก revoke ถูกใช้ซ้ำเป็นสัญญาณของ token theft หรือ client state ที่ผิด จึงต้อง revoke ทั้ง family" data-retry="ลองใหม่: มองหาการป้องกันเมื่อ server ไม่รู้ว่าใครถือ token เก่าตัวจริง">
+      <strong>Quiz: เมื่อ R1 ที่ถูก rotate/revoke แล้วถูกส่งมาอีก ระบบควรทำอะไร?</strong>
+      <p class="muted">A = ออก R3 ต่อ · B = revoke family · C = ignore แล้ว 200</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>ทำไม reuse detection จึง revoke ทั้ง family F1 แทนที่จะปฏิเสธเฉพาะ R1 ที่ถูก revoke อยู่แล้ว?</p>
+
+    <p>แหล่งหลัก: <a href="../docs/adr/0002-jwt-auth-strategy.md">ADR 0002 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/access-and-refresh-tokens.html">reference: access and refresh tokens</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะเรียง use cases ของ AuthService: register, login, refresh และ logout ครับ</footer>
+  </main>
+</body>
+</html>

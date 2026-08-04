@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 2 — Settings และ URL routing</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 2 · 10 minutes</p>
+    <h1>ใครบอก Django ว่า URL อยู่ที่ไหน?</h1>
+    <p class="lede">คำตอบคือ settings. ส่วน <code>urls.py</code> คือแผนที่ และ <code>api.urls</code> คือแผนที่ย่อยที่ Django Ninja สร้างให้</p>
+
+    <h2>1. Settings เลือก URL map หลัก</h2>
+    <pre><code># config/settings/base.py
+ROOT_URLCONF = "config.urls"</code></pre>
+    <p>ชื่อนี้เป็น Python import path ไม่ใช่ path บน disk: Django จึง import module <code>config.urls</code> แล้วมองหาตัวแปรชื่อ <code>urlpatterns</code> ในนั้น</p>
+    <div class="callout"><strong>เปรียบเทียบ:</strong> <code>ROOT_URLCONF</code> คือบอกตำแหน่ง “สมุดแผนที่หลัก”; <code>urlpatterns</code> คือรายการเส้นทางในสมุดนั้น</div>
+
+    <h2>2. <code>config/urls.py</code> เลือก prefix</h2>
+    <pre><code># config/urls.py
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("api/", api.urls),
+]</code></pre>
+    <p><code>path("api/", api.urls)</code> ไม่ได้เรียก endpoint โดยตรง แต่มันพูดว่า “ถ้า URL เริ่มด้วย <code>/api/</code> ให้ส่งส่วนที่เหลือให้ Ninja API นี้จัดการ”</p>
+
+    <h2>3. <code>api.urls</code> คืออะไร?</h2>
+    <pre><code># config/api.py
+api = NinjaAPI()
+
+@api.get("/health")
+async def health(request):
+    return {"status": "ok"}</code></pre>
+    <p><code>api</code> เป็น object ของ <code>NinjaAPI</code>. Attribute <code>api.urls</code> แปลง routes ที่ประกาศด้วย decorator เช่น <code>@api.get</code> เป็น Django URL patterns ที่ Django เข้าใจได้</p>
+
+    <div class="flow">
+      <div><code>ROOT_URLCONF = "config.urls"</code></div>
+      <div><code>path("api/", api.urls)</code> จับ prefix <code>/api/</code></div>
+      <div><code>@api.get("/health")</code> จับส่วนที่เหลือ <code>/health</code></div>
+      <div>รวมเป็น <code>GET /api/health</code></div>
+    </div>
+
+    <h2>กฎสำคัญ: prefix + route</h2>
+    <p>การประกอบ URL เกิดจากการต่อ string สองชั้น:</p>
+    <pre><code>"api/"     + "/health"  =  "/api/health"</code></pre>
+    <p>แม้ string แรกไม่มี slash ด้านหน้า (ตาม convention ของ Django) และ string ที่สองมี slash ด้านหน้า ผลลัพธ์ URL สำหรับ browser คือ <code>/api/health</code></p>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — settings ชี้ไปยัง URL map หลักด้วย ROOT_URLCONF" data-retry="ลองใหม่: คิดว่า Django อ่านค่าใดเพื่อรู้ว่าจะ import URL map ไหน">
+      <strong>Quiz: ตัวแปรใดบอก Django ว่า URL map หลักอยู่ที่ใด?</strong>
+      <p class="muted">A = ASGI_APPLICATION · B = ROOT_URLCONF · C = INSTALLED_APPS</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองตรวจด้วยตัวเอง</h2>
+    <p>เปิด <code>config/settings/base.py</code> แล้วหา <code>ROOT_URLCONF</code>; ต่อด้วย <code>config/urls.py</code> แล้วหา <code>path("api/", ...)</code>. ถ้าคุณเปลี่ยน prefix เป็น <code>v1/</code> (อย่าเพิ่งแก้จริง) URL ของ health จะกลายเป็นอะไร?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/http/urls/">Django URL dispatcher</a> และ <a href="https://docs.djangoproject.com/en/5.2/topics/settings/">Django settings</a></p>
+    <footer>ตอบคำถามท้ายบทมาได้เลย แล้วผมจะตรวจ reasoning ให้ ก่อนพาไปดู <code>Settings(BaseSettings)</code> และ environment variables</footer>
+  </main>
+</body>
+</html>

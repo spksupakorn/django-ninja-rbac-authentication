@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — User and UserManager</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>User และ UserManager</h1>
+    <div class="flow">
+      <div>Input: email + raw password</div>
+      <div><code>UserManager.create_user()</code> normalize และ validate email</div>
+      <div><code>user.set_password()</code> hash password; ไม่เก็บ raw password</div>
+      <div><code>user.save()</code> บันทึก user</div>
+    </div>
+    <h2>Model contract</h2>
+    <ul>
+      <li><code>email</code> ต้อง unique</li>
+      <li><code>USERNAME_FIELD = "email"</code></li>
+      <li><code>REQUIRED_FIELDS = []</code> เมื่อ createsuperuser ไม่ต้องถาม field อื่น</li>
+      <li><code>is_active</code> และ <code>is_staff</code> เป็น flags ที่ model กำหนดเอง</li>
+      <li><code>PermissionsMixin</code> ให้ <code>is_superuser</code>, groups และ permissions</li>
+    </ul>
+  </main>
+</body>
+</html>

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Settings and environment</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Settings และ environment</h1>
+    <div class="flow">
+      <div><code>DJANGO_SETTINGS_MODULE</code> เลือก <code>config.settings.dev</code></div>
+      <div><code>dev.py</code> import ค่ากลางจาก <code>base.py</code></div>
+      <div><code>Settings(BaseSettings)</code> อ่าน environment และ <code>.env</code></div>
+      <div>validate ค่า เช่น PostgreSQL URL และ JWT secret</div>
+      <div>ส่งออก Django settings เช่น <code>DATABASES</code>, <code>SECRET_KEY</code>, <code>DEBUG</code></div>
+    </div>
+    <h2>จำง่าย</h2>
+    <ul>
+      <li><strong>`.env`</strong> = ค่าเฉพาะเครื่องหรือ environment</li>
+      <li><strong>`Settings`</strong> = schema ที่ตรวจค่าจาก `.env`</li>
+      <li><strong>`base.py`</strong> = แปลงค่าที่ตรวจแล้วเป็น Django settings กลาง</li>
+      <li><strong>`dev.py` / `prod.py`</strong> = ปรับ behavior ตาม environment</li>
+    </ul>
+  </main>
+</body>
+</html>

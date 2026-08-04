@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Request flow</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>เส้นทางของ request</h1>
+    <div class="flow">
+      <div>Uvicorn เรียก <code>config.asgi:application</code></div>
+      <div>Django โหลด settings จาก <code>DJANGO_SETTINGS_MODULE</code></div>
+      <div><code>ROOT_URLCONF</code> เลือก <code>config.urls</code></div>
+      <div><code>path(&quot;api/&quot;, api.urls)</code> ส่งต่อให้ Ninja</div>
+      <div><code>@api.get(&quot;/health&quot;)</code> คืน JSON response</div>
+    </div>
+    <div class="callout"><strong>จำง่าย:</strong> ASGI รับเข้า → URL เลือกทาง → endpoint ทำงาน → response กลับออก</div>
+  </main>
+</body>
+</html>

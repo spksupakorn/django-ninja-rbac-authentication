@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — JWT auth guard</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>JWT guard และ permission guard</h1>
+    <div class="flow">
+      <div>HTTP Authorization: Bearer access-token</div>
+      <div><code>JWTAuth</code> verify signature และ expiration</div>
+      <div>สร้าง principal: user_id, roles, perms → <code>request.auth</code></div>
+      <div><code>require_permission(code)</code> ตรวจ <code>code in request.auth.perms</code></div>
+    </div>
+    <p><strong>401:</strong> ไม่มี/invalid/expired token. <strong>403:</strong> token valid แต่ไม่มี permission.</p>
+  </main>
+</body>
+</html>

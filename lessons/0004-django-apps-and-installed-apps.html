@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 4 — Django apps และ INSTALLED_APPS</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 4 · 12 minutes</p>
+    <h1>โฟลเดอร์ไหน “เป็น” Django app?</h1>
+    <p class="lede">Python package กลายเป็น Django app ที่ทำงานจริงเมื่อถูกประกาศใน <code>INSTALLED_APPS</code>. Django ใช้รายชื่อนี้สร้างทะเบียนกลางของ domain ทั้งหมดในโปรเจกต์</p>
+
+    <h2>เริ่มจาก settings</h2>
+    <pre><code># config/settings/base.py
+INSTALLED_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    # ... Django built-in apps
+    "apps.accounts",
+    "apps.authz",
+    "apps.common",
+]</code></pre>
+    <p>รายการนี้ <strong>ไม่ใช่ URL routes</strong>. มันบอก Django ว่า package ใดเป็นส่วนหนึ่งของ application system: Django จะค้นหา models, migrations, admin configuration และ resources ที่เกี่ยวข้องใน app เหล่านั้นเมื่อ boot</p>
+
+    <h2>Python package vs Django app</h2>
+    <div class="card">
+      <p><strong>Python package:</strong> โฟลเดอร์มี <code>__init__.py</code>; Python import ได้</p>
+      <p><strong>Django app:</strong> Python package ที่ Django register ผ่าน <code>INSTALLED_APPS</code>; จึงมี lifecycle และสามารถมี models/migrations ได้</p>
+    </div>
+    <p>ดังนั้น <code>apps/accounts/</code> เป็น package อยู่แล้ว แต่การใส่ <code>"apps.accounts"</code> ลงใน settings ทำให้มันมีบทบาทใน Django project</p>
+
+    <h2><code>apps.py</code> บอกตัวตนของ app</h2>
+    <pre><code># apps/accounts/apps.py
+class AccountsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.accounts"
+    label = "accounts"</code></pre>
+    <ul>
+      <li><code>name</code> คือ Python import path ของ app</li>
+      <li><code>label</code> คือชื่อสั้นที่ Django ใช้ระบุตัว app เช่น prefix ใน migration</li>
+      <li><code>default_auto_field</code> กำหนดชนิด primary key ที่ model ใหม่จะใช้เป็นค่าเริ่มต้น</li>
+    </ul>
+    <p>ใน Django รุ่นปัจจุบัน เมื่อ package มี <code>apps.py</code> ที่มี <code>AppConfig</code> เดียว Django เลือก config นี้ให้อัตโนมัติเมื่อเราใส่ <code>"apps.accounts"</code> ใน <code>INSTALLED_APPS</code></p>
+
+    <h2>สาม domain ของเรา</h2>
+    <div class="flow">
+      <div><code>accounts</code> — identity: User, email, password (เริ่ม M1)</div>
+      <div><code>authz</code> — authorization: Role, Permission, JWT (เริ่ม M2 เป็นต้นไป)</div>
+      <div><code>common</code> — ส่วนที่ใช้ข้าม domain: exceptions, pagination, throttling</div>
+    </div>
+    <p>ตอน M0 โฟลเดอร์เหล่านี้เป็น skeleton โดยตั้งใจ: เราลงทะเบียน domain ก่อน เพื่อให้ M1 สร้าง custom User และ migration แรกใน app ที่ถูกต้อง</p>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — INSTALLED_APPS เป็น registry ของ Django apps ไม่ใช่ URL map" data-retry="ลองใหม่: นึกถึงสิ่งที่ทำให้ Django ค้นหา model และ migration ของ package ได้">
+      <strong>Quiz: อะไรทำให้ Django รู้จัก <code>apps.accounts</code> เป็น app ของโปรเจกต์?</strong>
+      <p class="muted">A = urlpatterns · B = INSTALLED_APPS · C = ASGI_APPLICATION</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองทำเอง</h2>
+    <p>เปิด <code>config/settings/base.py</code> แล้วหา app ของเรา 3 ชื่อ. ต่อด้วยเปิด <code>apps/accounts/apps.py</code>. ลองตอบ: ถ้าเอา <code>"apps.accounts"</code> ออกจาก <code>INSTALLED_APPS</code> แล้ว M1 สร้าง <code>User</code> model อยู่ในโฟลเดอร์เดิม Django จะสร้าง migration ให้หรือไม่? เพราะอะไร?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/ref/applications/">Django applications (official docs)</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/django-apps.html">reference: Django apps</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย หรือถามผมว่า “model / migration คืออะไร” ก่อนเริ่ม M1 ก็ได้ครับ</footer>
+  </main>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — RBAC model</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>RBAC data model</h1>
+    <div class="flow">
+      <div>User ← <code>UserRole</code> → Role</div>
+      <div>Role ← <code>RolePermission</code> → Permission</div>
+      <div>Permission code = <code>resource.action</code>, เช่น <code>users.read</code></div>
+    </div>
+    <p><strong>คำถามตรวจสิทธิ์:</strong> user นี้มี role ใดบ้าง และแต่ละ role มี permission code ใดบ้าง?</p>
+    <p><strong>ข้อบังคับ:</strong> unique constraints ป้องกัน role หรือ permission ซ้ำในตารางเชื่อม</p>
+  </main>
+</body>
+</html>

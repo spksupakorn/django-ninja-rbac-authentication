@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 3 — Settings และ environment</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 3 · 12 minutes</p>
+    <h1>ค่าจาก `.env` เข้า Django อย่างไร?</h1>
+    <p class="lede">โปรเจกต์นี้ไม่เขียน password, database URL หรือ JWT secret ลงใน source code. เราใส่ค่าไว้ใน environment แล้วให้ Pydantic ตรวจมันก่อนส่งต่อให้ Django</p>
+
+    <h2>สี่ชิ้นที่ทำงานร่วมกัน</h2>
+    <div class="flow">
+      <div><code>.env</code>: เก็บค่าบนเครื่อง เช่น <code>DATABASE_URL</code></div>
+      <div><code>Settings(BaseSettings)</code>: อ่านและตรวจ type/รูปแบบ</div>
+      <div><code>base.py</code>: สร้าง Django settings กลาง</div>
+      <div><code>dev.py</code> หรือ <code>prod.py</code>: ปรับให้เหมาะกับ environment</div>
+    </div>
+
+    <h2>1. Django เลือก settings module</h2>
+    <pre><code># config/asgi.py และ manage.py
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.dev")</code></pre>
+    <p>ชื่อนี้บอก Django ให้ import <code>config/settings/dev.py</code> เมื่อเริ่มต้น. คำว่า <code>setdefault</code> หมายถึง: ใช้ <code>dev</code> เฉพาะเมื่อผู้รันยังไม่ได้กำหนดค่าอื่นไว้</p>
+    <pre><code># config/settings/dev.py
+from .base import *
+
+DEBUG = True</code></pre>
+    <p>ดังนั้น dev ได้ค่ากลางทั้งหมดจาก <code>base.py</code> แล้ว override เฉพาะค่าที่ต่าง เช่น <code>DEBUG</code>. Production ก็ใช้ฐานเดียวกัน แต่เปิด security settings ที่เข้มกว่า</p>
+
+    <h2>2. `.env` ไม่ใช่ Python code</h2>
+    <pre><code># .env (อยู่ใน .gitignore)
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rbac_auth
+JWT_SECRET=replace-with-a-long-random-secret
+ACCESS_TTL=15m</code></pre>
+    <p>นี่เป็นเพียง <code>NAME=value</code>. เพราะแต่ละเครื่องมี database และ secret ต่างกัน จึง commit เฉพาะ <code>.env.example</code> เป็น template แต่ไม่ commit <code>.env</code> ที่ใช้จริง</p>
+
+    <h2>3. Pydantic รับและตรวจค่า</h2>
+    <pre><code># config/settings/base.py
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=BASE_DIR / ".env")
+
+    database_url: str = Field(validation_alias="DATABASE_URL")
+    jwt_secret: SecretStr = Field(validation_alias="JWT_SECRET", min_length=32)
+
+settings = Settings()</code></pre>
+    <p>เมื่อสร้าง <code>Settings()</code>, Pydantic อ่าน environment และไฟล์ <code>.env</code>, map ชื่อ uppercase ไปยัง field แบบ typed, แล้ว validate. เช่น database URL ต้องเป็น PostgreSQL URL และ JWT secret ต้องยาวพอ</p>
+    <div class="callout"><strong>ผลลัพธ์สำคัญ:</strong> ถ้าค่าใดหายหรือผิด app จะ fail ระหว่าง boot. ดีกว่ารอให้ error เกิดขึ้นหลังมี request เข้ามา</div>
+
+    <h2>4. `base.py` แปลงเป็น Django settings</h2>
+    <pre><code># config/settings/base.py
+SECRET_KEY = settings.jwt_secret.get_secret_value()
+DATABASES = {"default": {"ENGINE": "django.db.backends.postgresql", ...}}
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.Argon2PasswordHasher", ...]</code></pre>
+    <p>Django ไม่รู้จัก Pydantic model โดยตรง; มันรู้จัก module ที่มีตัวแปรชื่อมาตรฐาน เช่น <code>SECRET_KEY</code>, <code>DATABASES</code>, <code>INSTALLED_APPS</code>. นี่คือเหตุผลที่มีทั้ง object ชื่อ <code>settings</code> และตัวแปร Django settings ตัวพิมพ์ใหญ่</p>
+
+    <div class="quiz" data-quiz data-correct="C" data-success="ถูกต้อง — Settings(BaseSettings) คือด่านตรวจค่าจาก environment ก่อน Django ใช้งาน" data-retry="ลองใหม่: มองหาส่วนที่อ่าน .env และประกาศ field แบบ typed">
+      <strong>Quiz: ส่วนใดรับผิดชอบอ่านและ validate `.env` ในโปรเจกต์นี้?</strong>
+      <p class="muted">A = config/urls.py · B = config/api.py · C = Settings(BaseSettings)</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองตอบโดยไม่ดูโค้ด</h2>
+    <p>ถ้าเปลี่ยน <code>DJANGO_SETTINGS_MODULE</code> เป็น <code>config.settings.prod</code>, ไฟล์ใดถูก import ก่อน: <code>prod.py</code> หรือ <code>base.py</code>? และทำไมสุดท้ายทั้งคู่จึงมีค่าจาก base ได้?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.pydantic.dev/latest/concepts/pydantic_settings/">Pydantic Settings (official docs)</a> และ <a href="https://docs.djangoproject.com/en/5.2/topics/settings/">Django settings (official docs)</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/environment-settings.html">reference: settings and environment</a></p>
+    <footer>ส่งคำตอบคำถามท้ายบทมาได้เลย หรือถามผมว่า “อธิบาย Field / SecretStr / validation_alias เพิ่ม” ได้ทุกจุด</footer>
+  </main>
+</body>
+</html>

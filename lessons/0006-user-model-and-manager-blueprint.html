@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 6 — User model และ UserManager</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 6 · 15 minutes</p>
+    <h1>ใครสร้าง User อย่างปลอดภัย?</h1>
+    <p class="lede">`User` อธิบายข้อมูลและความสามารถของคนหนึ่งคน; `UserManager` เป็นประตูมาตรฐานที่สร้าง User พร้อม validate email และ hash password ถูกวิธี</p>
+
+    <h2>แบ่งหน้าที่ก่อน</h2>
+    <div class="flow">
+      <div><code>User</code> = model/table และ fields ของผู้ใช้หนึ่งคน</div>
+      <div><code>UserManager</code> = วิธีสร้าง user และ superuser อย่างสม่ำเสมอ</div>
+      <div><code>AUTH_USER_MODEL</code> = บอก Django ให้ใช้ User model นี้</div>
+    </div>
+
+    <h2>Blueprint ของ User</h2>
+    <pre><code>class User(AbstractBaseUser, PermissionsMixin):
+    email = models.EmailField(unique=True)
+    is_active = models.BooleanField(default=True)
+    is_staff = models.BooleanField(default=False)
+
+    objects = UserManager()
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = []</code></pre>
+    <p>นี่คือ design ที่ M1 จะ implement; ตอนนี้ไฟล์ <code>models.py</code> ยังไม่มี เพราะเราอยู่ใน M0 skeleton</p>
+    <ul>
+      <li><code>email(unique=True)</code>: database บังคับว่าห้ามมี account สองบัญชีใช้ email เดียวกัน</li>
+      <li><code>is_active</code>: ใช้ปิดการใช้งาน account โดยไม่ต้องลบข้อมูล</li>
+      <li><code>is_staff</code>: ระบุว่าเข้า Django admin site ได้หรือไม่</li>
+      <li><code>USERNAME_FIELD</code>: เปลี่ยนความหมายของ “username” ในระบบ auth ให้เป็น email</li>
+      <li><code>REQUIRED_FIELDS</code>: fields เพิ่มที่ `createsuperuser` ต้องถาม; email อยู่ใน `USERNAME_FIELD` แล้วจึงไม่ใส่ซ้ำ</li>
+    </ul>
+
+    <h2>Base classes ให้สิ่งใด?</h2>
+    <div class="card">
+      <p><strong><code>AbstractBaseUser</code></strong> ให้ส่วนพื้นฐานของ password เช่น field password, <code>set_password()</code>, <code>check_password()</code>, และ <code>last_login</code></p>
+      <p><strong><code>PermissionsMixin</code></strong> ให้ <code>is_superuser</code>, groups, user permissions และ methods ตรวจสิทธิ์</p>
+    </div>
+    <p>สังเกตว่า <code>is_staff</code> ไม่ได้มาจากสอง base class นี้ จึงต้องประกาศใน custom model เองเพื่อใช้กับ admin</p>
+
+    <h2>UserManager ทำไมสำคัญ?</h2>
+    <pre><code>class UserManager(BaseUserManager):
+    def create_user(self, email, password, **extra_fields):
+        if not email:
+            raise ValueError("Email is required")
+        user = self.model(email=self.normalize_email(email), **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user</code></pre>
+    <p>ประเด็นสำคัญไม่ใช่ syntax แต่เป็นลำดับ:</p>
+    <div class="flow">
+      <div>ตรวจว่า email มีอยู่</div>
+      <div>normalize email เพื่อเก็บอย่างสม่ำเสมอ</div>
+      <div><code>set_password(raw_password)</code> สร้าง hash</div>
+      <div>save user</div>
+    </div>
+    <div class="callout"><strong>ห้าม:</strong> เขียน <code>user.password = raw_password</code>. วิธีนั้นเก็บรหัสผ่านจริงใน database และ Django จะ login ไม่ได้อย่างถูกต้อง. ต้องใช้ <code>set_password()</code> เสมอ</div>
+
+    <h2>Superuser เป็น user ที่มี flags เพิ่ม</h2>
+    <pre><code>def create_superuser(self, email, password, **extra_fields):
+    extra_fields.setdefault("is_staff", True)
+    extra_fields.setdefault("is_superuser", True)
+    return self.create_user(email, password, **extra_fields)</code></pre>
+    <p>implementation จริงควรตรวจด้วยว่า caller ไม่ได้ส่ง <code>is_staff=False</code> หรือ <code>is_superuser=False</code>. จึงมั่นใจได้ว่า superuser มีสิทธิ์ตามชื่อ</p>
+
+    <div class="quiz" data-quiz data-correct="C" data-success="ถูกต้อง — set_password() ทำ hashing ตาม password hasher ที่ตั้งไว้" data-retry="ลองใหม่: ต้องการ method ที่แปลง raw password เป็น hash ก่อน save">
+      <strong>Quiz: ต้องใช้ method ใดก่อนบันทึก password ของ User?</strong>
+      <p class="muted">A = save() · B = normalize_email() · C = set_password()</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>หาก API register รับ <code>email</code> กับ raw <code>password</code>, เหตุใด service ใน M5 ควรเรียก <code>UserManager.create_user()</code> แทนการสร้าง <code>User(email=...)</code> แล้ว save โดยตรง?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/auth/customizing/">Django custom authentication (official docs)</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/user-and-manager.html">reference: User and UserManager</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย หรือถามผมว่า “password hash ต่างจาก encrypt อย่างไร” ก่อนเริ่ม implementation ได้ครับ</footer>
+  </main>
+</body>
+</html>

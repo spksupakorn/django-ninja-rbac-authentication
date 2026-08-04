@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 20 — Endpoints, schemas และ OpenAPI</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 20 · 15 minutes</p>
+    <h1>Router คือ API contract ไม่ใช่ business logic</h1>
+    <p class="lede">M7 นำ use cases ของ AuthService มาเปิดเป็น HTTP endpoints. Django Ninja schema รับผิดชอบ validate input และ serialize output, ส่วน router เรียก service และบอก auth/permission ที่ route ต้องการ</p>
+
+    <h2>Auth endpoints</h2>
+    <table>
+      <thead><tr><th>Route</th><th>หน้าที่</th><th>Credentials</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /auth/register</code></td><td>สร้าง account และ default role</td><td>ไม่มี</td></tr>
+        <tr><td><code>POST /auth/login</code></td><td>ตรวจ password แล้วออก token pair</td><td>ไม่มี + throttle</td></tr>
+        <tr><td><code>POST /auth/refresh</code></td><td>rotate refresh token</td><td>refresh token + throttle</td></tr>
+        <tr><td><code>POST /auth/logout</code></td><td>revoke refresh token</td><td>refresh token</td></tr>
+        <tr><td><code>GET /auth/me</code></td><td>ข้อมูล principal ปัจจุบัน</td><td>access token</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Pydantic schema ทำหน้าที่อะไร?</h2>
+    <pre><code>class RegisterIn(Schema):
+    email: str
+    password: str
+
+class TokenPairOut(Schema):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"</code></pre>
+    <ul>
+      <li><strong>Input schema:</strong> ตรวจรูปร่างและชนิดของ JSON ก่อนส่งให้ service</li>
+      <li><strong>Output schema:</strong> กำหนด fields ที่ client ได้รับ และช่วยสร้าง OpenAPI documentation</li>
+      <li><strong>สำคัญ:</strong> อย่าส่ง Django User model ตรง ๆ เพราะอาจเผลอ expose password hash หรือ internal fields</li>
+    </ul>
+
+    <h2>Router ที่บางมีหน้าตาแบบใด?</h2>
+    <pre><code>@router.post("/login", response=TokenPairOut)
+async def login(request, payload: LoginIn):
+    return await auth_service.login(payload.email, payload.password)</code></pre>
+    <p>Router รับ validated <code>payload</code>, เรียก service, แล้ว Ninja serialize output ตาม schema. เมื่อ service raise <code>InvalidCredentials</code>, exception handler กลางจะตอบ 401</p>
+
+    <h2>Admin endpoints ต้องมี permission</h2>
+    <pre><code>GET  /admin/users                 → users.read
+POST /admin/users/{id}/roles      → roles.assign
+GET  /admin/roles                 → roles.read
+GET  /admin/permissions           → permissions.read</code></pre>
+    <p>Admin ไม่ได้แปลว่า endpoint ใต้ prefix <code>/admin/</code> จะปลอดภัยเอง. ทุก route ต้องใช้ JWTAuth และ <code>require_permission(...)</code> ที่ตรงกับ action</p>
+
+    <h2>Pagination คือส่วนของ contract</h2>
+    <p>List endpoints เช่น users, roles และ permissions ต้องมี pagination. Client จึงรู้ว่าจะขอ page/limit อย่างไร และ response บอก items กับ metadata ที่แน่นอน แทนการคืนทุก record จน response โตไม่จำกัด</p>
+
+    <h2>OpenAPI ได้มาฟรีจาก schema/routes</h2>
+    <pre><code>NinjaAPI()
+  → /api/openapi.json  # machine-readable contract
+  → /api/docs          # interactive documentation</code></pre>
+    <p>เมื่อ annotation และ schemas ถูกต้อง Ninja สร้าง API docs ได้. ตอนนี้ M0 มี docs root แล้ว; M7 จะทำให้ auth/admin endpoints ปรากฏในหน้านั้น</p>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — output schema เป็น boundary ป้องกันไม่ให้ internal fields เช่น password hash หลุดออกไป" data-retry="ลองใหม่: นึกถึงสิ่งที่กำหนด fields ที่ API อนุญาตให้ตอบกลับ">
+      <strong>Quiz: อะไรช่วยป้องกันไม่ให้ password hash หลุดใน API response?</strong>
+      <p class="muted">A = URL prefix · B = output schema · C = migration</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>ทำไม <code>GET /auth/me</code> ต้องใช้ access token แต่ <code>POST /auth/refresh</code> ใช้ refresh token? อธิบายด้วยหน้าที่และอายุของ token สองชนิด</p>
+
+    <p>แหล่งหลัก: <a href="https://django-ninja.dev/guides/input/">Django Ninja schema guide</a> และ <a href="../docs/IMPLEMENTATION_PLAN.md">implementation plan</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/api-endpoint-contracts.html">reference: API endpoint contracts</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะปิด Phase 1 ด้วย M8: test layers, factories, CI และ production hardening ครับ</footer>
+  </main>
+</body>
+</html>

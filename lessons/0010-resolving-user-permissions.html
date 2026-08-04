@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 10 — Resolving user permissions</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 10 · 12 minutes</p>
+    <h1>จาก Role หลายตัวเป็น permission set เดียว</h1>
+    <p class="lede">Endpoint ไม่ควรต้องรู้ว่าผู้ใช้มี role ใดบ้างละเอียดทุกครั้ง; สิ่งที่มันต้องตอบคือ “มี permission code ที่ต้องการหรือไม่?” ดังนั้นระบบจึง resolve ความสัมพันธ์เป็นชุดของ codes</p>
+
+    <h2>คำถามที่ระบบตอบ</h2>
+    <pre><code>user.permissions()
+# ผลลัพธ์เชิงแนวคิด
+{"users.read", "reports.read", "roles.assign"}</code></pre>
+    <p>ผลลัพธ์เป็น <code>set[str]</code> ไม่ใช่ list เพราะ permission เดียวอาจมาจากหลาย roles แต่สำหรับการอนุญาต เราสนใจเพียงว่ามีหรือไม่มี</p>
+
+    <h2>เดิน relation ทีละชั้น</h2>
+    <div class="flow">
+      <div>User: Alice</div>
+      <div><code>UserRole</code> → roles: manager, auditor</div>
+      <div><code>RolePermission</code> → codes: reports.read, users.read, reports.read</div>
+      <div>แปลงเป็น set → {reports.read, users.read}</div>
+    </div>
+    <p>แม้ทั้ง <code>manager</code> และ <code>auditor</code> มี <code>reports.read</code>, set จะเก็บเพียงครั้งเดียว</p>
+
+    <h2>จาก set ไปสู่ authorization decision</h2>
+    <pre><code>required = "reports.read"
+allowed = required in user_permission_codes</code></pre>
+    <p>นี่คือ logic ขั้นต่ำของ <code>require_permission(code)</code> ใน M6. M6 จะอ่าน codes จาก access token เพื่อเลี่ยง query database ทุก request แต่ความจริงต้นทางยังมาจาก RBAC relationships ที่เรียนใน M2</p>
+    <div class="callout"><strong>แยก concern:</strong> M2 นิยามว่า “ใครมีสิทธิ์อะไร” ใน database; M6 นิยามว่า “HTTP request นี้ผ่านหรือไม่”. ทั้งคู่ใช้ code contract เดียวกัน</div>
+
+    <h2>ทำไมไม่เก็บ permissions บน User โดยตรง?</h2>
+    <p>การ resolve ตอนต้องใช้ทำให้ role เป็น source ของ policy ตาม RBAC. User ที่ได้ role ใหม่หรือ role ที่ถูกปรับ policy จะได้ผลของ relationship โดยไม่ต้องเขียน list permissions ใหม่ใส่ทุก User</p>
+
+    <h2>ความสดของข้อมูลและ JWT</h2>
+    <p>เมื่อ M4/M6 ใส่ roles และ permissions ลง access token, request ต่อ ๆ ไปจะใช้ snapshot ใน token จน token หมดอายุ (แผนกำหนด 15 นาที). จึงมี trade-off: request เร็วขึ้น แต่การเปลี่ยน role ไม่สะท้อนทันทีใน token เก่าทุกใบ</p>
+
+    <div class="quiz" data-quiz data-correct="C" data-success="ถูกต้อง — set ตัด permission ซ้ำที่มาจากหลาย roles โดยธรรมชาติ" data-retry="ลองใหม่: เลือกชนิดข้อมูลที่สื่อว่า membership สำคัญ แต่ลำดับและค่า duplicate ไม่สำคัญ">
+      <strong>Quiz: ทำไมผลลัพธ์ permission codes จึงเหมาะเป็น <code>set</code>?</strong>
+      <p class="muted">A = ต้องเรียงลำดับ · B = ต้องนับซ้ำ · C = ตัดค่าซ้ำ</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>ถ้า Alice มี roles สองตัว และทั้งสองให้ <code>reports.read</code>, permission set สุดท้ายควรมี <code>reports.read</code> กี่ครั้ง? และเหตุใด?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/db/examples/many_to_many/">Django many-to-many relationships (official docs)</a> และ <a href="../docs/adr/0001-rbac-role-permission-model.md">ADR 0001 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/permission-resolution.html">reference: permission resolution</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะเริ่ม M3: ทำไม API/service/repository ต้องแยกชั้นกัน</footer>
+  </main>
+</body>
+</html>

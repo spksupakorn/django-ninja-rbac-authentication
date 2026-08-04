@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Django migrations</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Migration workflow</h1>
+    <div class="flow">
+      <div>แก้ <code>models.py</code></div>
+      <div><code>python manage.py makemigrations</code> สร้าง migration file</div>
+      <div>review และ commit migration file</div>
+      <div><code>python manage.py migrate</code> เปลี่ยน database schema</div>
+    </div>
+    <p><strong>จำง่าย:</strong> <code>makemigrations</code> เขียนแผน; <code>migrate</code> ทำตามแผนกับ database</p>
+  </main>
+</body>
+</html>

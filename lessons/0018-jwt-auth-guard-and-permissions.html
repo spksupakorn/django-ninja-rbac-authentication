@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 18 — JWT auth guard และ permissions</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 18 · 15 minutes</p>
+    <h1>จาก Bearer token เป็น principal</h1>
+    <p class="lede">M6 ทำให้ endpoint รู้ว่า caller เป็นใครและมีสิทธิ์อะไร โดยไม่ให้ทุก endpoint decode JWT ซ้ำเอง. `JWTAuth` ทำงานครั้งเดียว แล้ววาง principal ที่ตรวจแล้วไว้ใน <code>request.auth</code></p>
+
+    <h2>สิ่งที่ client ส่ง</h2>
+    <pre><code>GET /admin/users HTTP/1.1
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...</code></pre>
+    <p><code>Bearer</code> คือ convention ที่บอกว่า value ถัดไปเป็น credential token. อย่าส่ง refresh token ใน header นี้; protected APIs ใช้ access token เท่านั้น</p>
+
+    <h2>JWTAuth ทำอะไร?</h2>
+    <div class="flow">
+      <div>อ่าน access token จาก Authorization header</div>
+      <div>decode โดยกำหนด HS256 และ verify signature</div>
+      <div>ตรวจ <code>exp</code> ว่ายังไม่หมดอายุ</div>
+      <div>อ่าน claims: <code>sub</code>, <code>roles</code>, <code>perms</code></div>
+      <div>สร้าง principal แล้วแนบเป็น <code>request.auth</code></div>
+    </div>
+    <pre><code># ภาพของ request.auth
+Principal(
+    user_id="42",
+    roles={"manager"},
+    perms={"reports.read"},
+)</code></pre>
+    <p>Principal เป็นข้อมูล caller ที่ endpoint ใช้ได้โดยไม่ต้องรู้ JWT encoding details</p>
+
+    <h2>Authentication vs authorization</h2>
+    <div class="card">
+      <p><strong>Authentication:</strong> “คุณคือใคร?” — JWTAuth ตอบจาก signature/exp; failure ตอบ <strong>401</strong></p>
+      <p><strong>Authorization:</strong> “คุณทำสิ่งนี้ได้ไหม?” — permission guard ตรวจ <code>perms</code>; failure ตอบ <strong>403</strong></p>
+    </div>
+    <pre><code>ไม่มี token / token ปลอม / token หมดอายุ → 401
+token ถูกต้อง แต่ไม่มี "roles.assign"     → 403</code></pre>
+
+    <h2>Permission guard</h2>
+    <pre><code>require_permission("roles.assign")
+  → "roles.assign" in request.auth.perms ?
+  → true: endpoint ทำงานต่อ
+  → false: raise PermissionDenied → HTTP 403</code></pre>
+    <p>Guard ไม่ query RBAC tables ทุก request เพราะ <code>perms</code> เป็น snapshot ใน access token. นี่เชื่อม Lesson 10 เข้ากับ JWT claims ใน Lesson 15</p>
+
+    <h2>ทำไมแยก guard?</h2>
+    <p>หาก endpoint ทุกตัว decode token และเขียน <code>if</code> ตรวจ permission เอง โค้ดจะซ้ำและลืม verify ได้ง่าย. Guard กลางทำให้ policy ตรวจแบบสม่ำเสมอ และ router อ่านคล้าย API contract:</p>
+    <pre><code>@router.get("/admin/users", auth=JWTAuth())
+def list_users(request):
+    require_permission("users.read")(request)
+    ...</code></pre>
+    <p>syntax จริงอาจเป็น dependency/decorator ตาม implementation แต่แนวคิดคือ route ระบุ auth/permission อย่างชัดเจน</p>
+
+    <div class="quiz" data-quiz data-correct="C" data-success="ถูกต้อง — token valid ยืนยัน identity แล้ว แต่ permission ไม่พอจึงเป็น authorization failure = 403" data-retry="ลองใหม่: 401 คือไม่มี/invalid credentials; 403 คือ credentials ใช้ได้แต่ไม่อนุญาต action">
+      <strong>Quiz: access token valid แต่ไม่มี <code>users.read</code>; endpoint ควรตอบอะไร?</strong>
+      <p class="muted">A = 200 · B = 401 · C = 403</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>เหตุใด endpoint จึงควรอ่าน permission จาก <code>request.auth.perms</code> แทน decode JWT และ query database เองทุกครั้ง?</p>
+
+    <p>แหล่งหลัก: <a href="https://django-ninja.dev/guides/authentication/">Django Ninja authentication guide</a> และ <a href="../docs/adr/0002-jwt-auth-strategy.md">ADR 0002 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/jwt-auth-guard.html">reference: JWT auth guard</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะต่อด้วย login/refresh throttling และเหตุผลที่ต้องตอบ 429 ครับ</footer>
+  </main>
+</body>
+</html>

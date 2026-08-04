@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — JWT claims</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>JWT access-token claims</h1>
+    <table>
+      <thead><tr><th>Claim</th><th>ความหมาย</th></tr></thead>
+      <tbody>
+        <tr><td><code>sub</code></td><td>user ID ของ subject</td></tr>
+        <tr><td><code>exp</code></td><td>เวลาหมดอายุ</td></tr>
+        <tr><td><code>iat</code></td><td>เวลาที่ออก token</td></tr>
+        <tr><td><code>jti</code></td><td>token ID ที่ไม่ซ้ำ</td></tr>
+        <tr><td><code>roles</code></td><td>role snapshot</td></tr>
+        <tr><td><code>perms</code></td><td>permission-code snapshot</td></tr>
+      </tbody>
+    </table>
+    <p><strong>จำ:</strong> JWT signed ไม่ได้ encrypted. อย่าใส่ password หรือ secret ใน payload.</p>
+  </main>
+</body>
+</html>

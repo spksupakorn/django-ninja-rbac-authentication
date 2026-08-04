@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Domain errors</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Domain errors → HTTP</h1>
+    <div class="flow">
+      <div>Repository/service พบ business failure</div>
+      <div>Service raise named domain error</div>
+      <div>Ninja exception handler จับ error</div>
+      <div>API ส่ง status code และ safe JSON response</div>
+    </div>
+    <table>
+      <thead><tr><th>Error</th><th>HTTP</th></tr></thead>
+      <tbody>
+        <tr><td><code>InvalidCredentials</code></td><td>401</td></tr>
+        <tr><td><code>PermissionDenied</code></td><td>403</td></tr>
+        <tr><td><code>EmailAlreadyExists</code></td><td>409</td></tr>
+        <tr><td><code>TokenReused</code></td><td>401</td></tr>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 5 — Custom User ก่อน migration แรก</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 5 · 15 minutes</p>
+    <h1>ทำไม User model เป็น “ประตูทางเดียว”?</h1>
+    <p class="lede">Django มี User model มาตรฐานให้ แต่โปรเจกต์นี้ต้อง login ด้วย email และไม่ต้องการ username. เราจึงเลือก custom user model <em>ก่อน</em> database schema ของเราเริ่มถูกสร้าง</p>
+
+    <h2>User model คืออะไร?</h2>
+    <p>Model คือ Python class ที่ Django map ไปยัง database table. User model คือ model พิเศษสำหรับตัวตนที่ login ได้; Django auth, admin, permission และ model อื่น ๆ จะอ้างอิงมัน</p>
+    <div class="card">
+      <p><strong>Default:</strong> Django ใช้ <code>auth.User</code> ซึ่งมี <code>username</code></p>
+      <p><strong>โปรเจกต์นี้:</strong> จะใช้ <code>accounts.User</code> และ email เป็น identity หลัก</p>
+    </div>
+
+    <h2>สิ่งที่ M1 จะสร้าง</h2>
+    <pre><code>apps/accounts/
+  models.py       # class User(AbstractBaseUser, PermissionsMixin)
+  managers.py     # UserManager.create_user / create_superuser
+  migrations/
+
+config/settings/base.py
+  AUTH_USER_MODEL = "accounts.User"</code></pre>
+    <ul>
+      <li><code>AbstractBaseUser</code> ให้พื้นฐาน password hashing และ authentication behavior โดยไม่บังคับ field username</li>
+      <li><code>PermissionsMixin</code> เพิ่ม flags/relations ที่ Django ใช้กับ groups, permissions และ superuser</li>
+      <li><code>UserManager</code> กำหนดวิธีสร้าง user ให้ validate และ normalize email สม่ำเสมอ</li>
+      <li><code>USERNAME_FIELD = "email"</code> บอก Django ว่า email คือ identifier ตอน login/createsuperuser</li>
+    </ul>
+
+    <h2>ทำไมต้องก่อน migration แรก?</h2>
+    <p>Migration คือประวัติคำสั่งที่เปลี่ยน database schema. เมื่อ migration เริ่มมี foreign key ไปที่ user model Django ต้องรู้ว่าปลายทางคือ model ใดแล้ว</p>
+    <div class="flow">
+      <div>ตั้ง <code>AUTH_USER_MODEL = "accounts.User"</code></div>
+      <div>สร้าง initial migration ของ <code>accounts</code></div>
+      <div>migrate สร้าง table ของ custom User</div>
+      <div>M2 เช่น UserRole อ้างอิง user model เดียวกัน</div>
+    </div>
+    <div class="callout"><strong>ถ้าตั้งช้า:</strong> database อาจมี foreign key และ migrations ที่ผูกกับ <code>auth.User</code> ไปแล้ว การสลับไป <code>accounts.User</code> ต้องย้าย schema/data/relations อย่างระมัดระวัง จึงควรตัดสินใจตอนเริ่มต้น</div>
+
+    <h2>การอ้างอิง user ในอนาคต</h2>
+    <pre><code># ใน model อื่น (เช่น RefreshToken ในอนาคต)
+user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)</code></pre>
+    <p>อย่า hard-code <code>auth.User</code>. การอ้างผ่าน <code>settings.AUTH_USER_MODEL</code> ทำให้ทุก relation ชี้ไปยัง user model ที่โปรเจกต์เลือกไว้</p>
+
+    <div class="quiz" data-quiz data-correct="A" data-success="ถูกต้อง — AUTH_USER_MODEL ต้องชี้ไปที่ custom model ก่อน migrations ที่พึ่งพา User ถูกสร้าง" data-retry="ลองใหม่: คิดถึงเวลาที่ Django ต้องตัดสินว่า foreign key ไปยัง User table ใด">
+      <strong>Quiz: ควรตั้ง <code>AUTH_USER_MODEL</code> เมื่อใด?</strong>
+      <p class="muted">A = ก่อน migration แรก · B = หลังมี users · C = หลัง M2</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>สมมติ M2 จะเพิ่ม <code>UserRole</code> ที่เชื่อม User กับ Role. ถ้า M1 ใช้ default <code>auth.User</code> ไปแล้ว แต่ต่อมาอยากเปลี่ยนเป็น <code>accounts.User</code>, relation ของ <code>UserRole</code> จะมีความเสี่ยงอะไร?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/auth/customizing/">Django custom authentication (official docs)</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/custom-user-model.html">reference: custom user model</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะอ่าน design ของ <code>User</code> และ <code>UserManager</code> ก่อนลงมือ implement M1</footer>
+  </main>
+</body>
+</html>

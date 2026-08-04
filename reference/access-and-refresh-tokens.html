@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Access and refresh tokens</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Access + refresh token lifecycle</h1>
+    <div class="flow">
+      <div>Login → access token (15m) + raw refresh token (7d)</div>
+      <div>DB เก็บ hash ของ refresh token พร้อม family และ revoked state</div>
+      <div>Refresh ปกติ → revoke token เก่า + ออก token ใหม่ใน family เดิม</div>
+      <div>ใช้ refresh token ที่ revoked ซ้ำ → revoke ทั้ง family → login ใหม่</div>
+    </div>
+    <p><strong>กฎ:</strong> raw refresh token ส่งให้ client ครั้งเดียว; database เก็บ hash เท่านั้น.</p>
+  </main>
+</body>
+</html>

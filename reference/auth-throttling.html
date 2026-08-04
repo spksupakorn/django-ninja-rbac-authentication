@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Auth throttling</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Login / refresh throttling</h1>
+    <div class="flow">
+      <div>Request เข้า login หรือ refresh</div>
+      <div>นับตาม IP (และเพิ่มตาม email เมื่อ implement)</div>
+      <div>ไม่เกิน 5/min → ทำ auth flow ต่อ</div>
+      <div>เกิน limit → HTTP 429 Too Many Requests</div>
+    </div>
+    <p><strong>ข้อจำกัด:</strong> in-memory counter ไม่ share ข้ามหลาย web instances; Phase 2 จึงพิจารณา Redis.</p>
+  </main>
+</body>
+</html>

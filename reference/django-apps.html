@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Django apps</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Django app ในโปรเจกต์นี้</h1>
+    <div class="flow">
+      <div><code>INSTALLED_APPS</code> บอก Django ว่าเปิดใช้ package ใด</div>
+      <div>Django สร้าง app registry และอ่าน <code>AppConfig</code></div>
+      <div>ภายหลัง Django ค้นหา models, migrations, admin และ resources ของ app</div>
+    </div>
+    <table>
+      <thead><tr><th>App</th><th>หน้าที่</th></tr></thead>
+      <tbody>
+        <tr><td><code>accounts</code></td><td>User และ identity</td></tr>
+        <tr><td><code>authz</code></td><td>Roles, permissions และ authorization</td></tr>
+        <tr><td><code>common</code></td><td>สิ่งที่ใช้ร่วมกัน เช่น exceptions และ pagination</td></tr>
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>

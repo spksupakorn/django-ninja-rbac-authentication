@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Permission catalog and seed</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Permission catalog และ seed data</h1>
+    <div class="flow">
+      <div><code>permissions.py</code> นิยาม code เช่น <code>users.read</code> หนึ่งครั้ง</div>
+      <div>data migration สร้าง Permission rows จาก catalog</div>
+      <div>data migration สร้าง roles เช่น <code>admin</code>, <code>user</code></div>
+      <div>RolePermission ผูก role กับสิทธิ์เริ่มต้น</div>
+    </div>
+    <p><strong>กฎ:</strong> application code ไม่ควรพิมพ์ permission code เป็น string กระจัดกระจาย</p>
+  </main>
+</body>
+</html>

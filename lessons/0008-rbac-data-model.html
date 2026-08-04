@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 8 — RBAC data model</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 8 · 15 minutes</p>
+    <h1>User ได้สิทธิ์ผ่าน Role</h1>
+    <p class="lede">RBAC ย่อมาจาก Role-Based Access Control: เราไม่แจกสิทธิ์ให้ User ทีละข้อเป็นหลัก แต่ให้ User มี Role แล้ว Role เป็นเจ้าของชุด Permission</p>
+
+    <h2>สี่ model ของ M2</h2>
+    <div class="flow">
+      <div><code>User</code> ← <code>UserRole</code> → <code>Role</code></div>
+      <div><code>Role</code> ← <code>RolePermission</code> → <code>Permission</code></div>
+      <div><code>Permission.code</code> เช่น <code>users.read</code> หรือ <code>users.update</code></div>
+    </div>
+    <p>ลูกศรผ่าน table ตรงกลางหมายถึง many-to-many: User คนหนึ่งมีหลาย Role ได้ และ Role หนึ่งมอบให้ User หลายคนได้; Role หนึ่งมีหลาย Permission ได้เช่นกัน</p>
+
+    <h2>เดินตามตัวอย่างจริง</h2>
+    <pre><code>User:   alice@example.com
+Role:   admin
+Perms:  users.read, users.update, roles.assign
+
+UserRole:       (alice, admin)
+RolePermission: (admin, users.read)
+RolePermission: (admin, users.update)
+RolePermission: (admin, roles.assign)</code></pre>
+    <p>เมื่อ endpoint ต้องการตรวจ <code>roles.assign</code>, ระบบไม่ได้ถาม “Alice มี string นี้ไหม?” โดยตรง แต่เดิน relationship:</p>
+    <pre><code>Alice → UserRole → admin → RolePermission → roles.assign</code></pre>
+
+    <h2>ทำไมไม่ใส่ list ลงใน User?</h2>
+    <div class="card">
+      <p><strong>ไม่เลือก:</strong> <code>User.permissions = ["users.read", ...]</code> ทำให้ต้องแก้ user ทุกคนเมื่อเปลี่ยนชุดสิทธิ์ของ role</p>
+      <p><strong>เลือก RBAC:</strong> แก้ permission ของ role เพียงครั้งเดียว แล้ว user ทุกคนที่มี role นั้นได้รับผลตาม policy เดียวกัน</p>
+    </div>
+
+    <h2>ทำไมใช้ through tables ชัดเจน?</h2>
+    <p><code>UserRole</code> และ <code>RolePermission</code> เป็น table เชื่อมที่ explicit. นอกจากเชื่อมสอง model แล้ว ภายหลังสามารถใส่ข้อมูลบนความสัมพันธ์เอง เช่น วันที่ assign role, ผู้ที่ assign, หรือเหตุผลได้</p>
+    <pre><code>class UserRole(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, ...)
+    role = models.ForeignKey(Role, ...)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["user", "role"], name="unique_user_role")
+        ]</code></pre>
+    <p>unique constraint หมายความว่า `(alice, admin)` ซ้ำสองแถวไม่ได้. เช่นเดียวกัน `(admin, users.read)` ซ้ำไม่ได้</p>
+
+    <h2>Permission code เป็นภาษากลาง</h2>
+    <p>รูปแบบ <code>resource.action</code> ทำให้สื่อความหมายและตรวจง่าย:</p>
+    <pre><code>users.read
+users.update
+roles.assign</code></pre>
+    <p>ใน M2 จะมี <code>permissions.py</code> เป็น single source of truth เพื่อไม่ให้ router, service และ data seed สะกด code คนละแบบ</p>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — RolePermission เป็นความสัมพันธ์ที่บอกว่า role ใดมี permission ใด" data-retry="ลองใหม่: มองหาตารางที่เชื่อม Role กับ Permission โดยตรง">
+      <strong>Quiz: ตารางใดบอกว่า Role `admin` มี `users.read`?</strong>
+      <p class="muted">A = UserRole · B = RolePermission · C = Permission</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>หากเพิ่ม permission <code>reports.read</code> ให้ Role <code>manager</code>, ต้องแก้ข้อมูลของ User ทุกคนที่มี role manager หรือไม่? เพราะอะไร?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/db/examples/many_to_many/">Django many-to-many relationships (official docs)</a> และ <a href="../docs/adr/0001-rbac-role-permission-model.md">ADR 0001 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/rbac-model.html">reference: RBAC model</a></p>
+    <footer>ตอบคำถามท้ายบทมาได้เลย แล้วเราจะต่อด้วย permission catalog, seed roles และ query ว่า user มีสิทธิ์ใดบ้าง</footer>
+  </main>
+</body>
+</html>

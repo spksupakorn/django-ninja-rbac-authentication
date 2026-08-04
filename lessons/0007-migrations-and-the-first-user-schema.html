@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 7 — Migrations และ User schema แรก</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 7 · 12 minutes</p>
+    <h1>Model เปลี่ยน database ได้อย่างไร?</h1>
+    <p class="lede">Django ไม่เปลี่ยน PostgreSQL ทันทีเมื่อเราแก้ Python class. เราสร้าง migration file ที่เป็นประวัติ schema ก่อน แล้วจึง apply ประวัตินั้นกับ database</p>
+
+    <h2>สองคำสั่ง สองหน้าที่</h2>
+    <div class="card">
+      <p><code>python manage.py makemigrations</code> อ่านการเปลี่ยนแปลงใน <code>models.py</code> แล้ว <strong>เขียน Python migration file</strong> ลง repository</p>
+      <p><code>python manage.py migrate</code> อ่าน migration files ที่ยังไม่ apply แล้ว <strong>เปลี่ยน schema ใน database</strong></p>
+    </div>
+    <pre><code>models.py
+  ↓
+makemigrations
+  ↓
+apps/accounts/migrations/0001_initial.py
+  ↓
+migrate
+  ↓
+PostgreSQL tables</code></pre>
+    <div class="callout"><strong>เปรียบเทียบ:</strong> <code>makemigrations</code> คือเขียนแบบแปลนและเก็บใน Git; <code>migrate</code> คือช่างสร้างตามแบบแปลนใน database</div>
+
+    <h2>ทำไม M0 มีโฟลเดอร์ migrations แล้ว?</h2>
+    <p><code>apps/accounts/migrations/__init__.py</code> ทำให้ Django มอง <code>migrations/</code> เป็น Python package. ตอน M1 เมื่อมี <code>User</code> model, Django จะสร้างไฟล์แรก เช่น <code>0001_initial.py</code> ไว้ตรงนี้</p>
+
+    <h2>ลำดับปลอดภัยของ M1</h2>
+    <div class="flow">
+      <div>เพิ่ม <code>User</code> และ <code>UserManager</code> ใน accounts</div>
+      <div>ตั้ง <code>AUTH_USER_MODEL = "accounts.User"</code> ใน settings</div>
+      <div>รัน <code>makemigrations accounts</code></div>
+      <div>review <code>accounts/migrations/0001_initial.py</code></div>
+      <div>รัน <code>migrate</code> บน PostgreSQL</div>
+    </div>
+    <p>เหตุผลที่ setting มาก่อน migration: migration ของ app อื่นในอนาคตจะอ้างอิง user model ที่ถูกเลือกแล้วตั้งแต่ต้น</p>
+
+    <h2>ไฟล์ migration มีไว้ทำอะไร?</h2>
+    <pre><code># ตัวอย่างแนวคิด ไม่ใช่ไฟล์จริงของโปรเจกต์
+migrations.CreateModel(
+    name="User",
+    fields=[
+        ("id", models.BigAutoField(...)),
+        ("email", models.EmailField(unique=True)),
+        ...
+    ],
+)</code></pre>
+    <p>ไฟล์นี้เป็น Python code ที่บรรยาย schema เป้าหมาย. ต้อง commit มันพร้อมกับ model change เพื่อให้ teammate, CI และ production database เปลี่ยน schema แบบเดียวกัน</p>
+
+    <h2>คำสั่งช่วยตรวจ</h2>
+    <pre><code># แสดง migration ทั้งหมดและสถานะว่า apply แล้วหรือยัง
+uv run python manage.py showmigrations
+
+# ตรวจว่า model change มี migration ที่ลืมสร้างหรือไม่
+uv run python manage.py makemigrations --check --dry-run</code></pre>
+    <p>ตอนนี้ M0 ยังไม่มี model ของเรา จึงยังไม่มี <code>accounts/0001_initial.py</code>; นั่นเป็นปกติ</p>
+
+    <div class="quiz" data-quiz data-correct="B" data-success="ถูกต้อง — makemigrations สร้าง file; migrate จึงค่อยเปลี่ยน database" data-retry="ลองใหม่: แยกให้ชัดระหว่างเขียนแผนใน repository กับ apply แผนนั้นกับ database">
+      <strong>Quiz: คำสั่งใดเปลี่ยน PostgreSQL schema จริง?</strong>
+      <p class="muted">A = makemigrations · B = migrate · C = showmigrations</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>ถ้า teammate ดึงโค้ด <code>models.py</code> ใหม่มา แต่ไม่ได้รับไฟล์ <code>0001_initial.py</code> มาด้วย จะเกิดปัญหาอะไรเมื่อรัน <code>migrate</code>?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/migrations/">Django migrations (official docs)</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/migrations.html">reference: migrations</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะพร้อมอ่าน implementation plan ของ M1 แบบไฟล์ต่อไฟล์ครับ</footer>
+  </main>
+</body>
+</html>

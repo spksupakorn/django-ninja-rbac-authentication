@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 15 — JWT core และ claims</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 15 · 15 minutes</p>
+    <h1>JWT คือบัตรที่ server เซ็นให้</h1>
+    <p class="lede">หลัง login สำเร็จ server ออก JWT ให้ client ส่งกลับมากับ request ต่อไป. Server ตรวจ signature และ claims ได้โดยไม่ต้อง query database ทุก request เพื่อรู้ว่า token ถูกออกโดยระบบและยังใช้ได้หรือไม่</p>
+
+    <h2>โครงสร้างสามส่วน</h2>
+    <pre><code>header.payload.signature</code></pre>
+    <div class="card">
+      <p><strong>Header:</strong> metadata เช่น algorithm <code>HS256</code></p>
+      <p><strong>Payload:</strong> claims เช่น user id และเวลาหมดอายุ</p>
+      <p><strong>Signature:</strong> หลักฐานว่าข้อมูลถูกเซ็นด้วย secret ของ server และไม่ถูกแก้</p>
+    </div>
+    <div class="callout"><strong>สำคัญ:</strong> payload เป็น Base64URL encoding ไม่ใช่ encryption. ใครที่มี token อ่าน payload ได้ จึงห้ามใส่ password, JWT secret หรือข้อมูลลับในนั้น</div>
+
+    <h2>HS256 ใช้ secret อย่างไร?</h2>
+    <pre><code>token = jwt.encode(payload, JWT_SECRET, algorithm="HS256")
+claims = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])</code></pre>
+    <p>HS256 เป็น symmetric signing: server ที่ออก token และ server ที่ verify token ต้องมี <code>JWT_SECRET</code> เดียวกัน. ถ้าแก้ payload เช่น เพิ่ม permission แต่ไม่มี secret ที่ถูกต้อง signature จะ verify ไม่ผ่าน</p>
+
+    <h2>Claims ของ access token</h2>
+    <pre><code>{
+  "sub": "42",
+  "exp": 1760000900,
+  "iat": 1760000000,
+  "jti": "unique-token-id",
+  "roles": ["manager"],
+  "perms": ["reports.read"]
+}</code></pre>
+    <ul>
+      <li><code>sub</code> (subject): identity ของ user; โดยทั่วไปส่ง user ID เป็น string</li>
+      <li><code>exp</code> (expiration): หลังเวลานี้ token ใช้ไม่ได้</li>
+      <li><code>iat</code> (issued at): เวลาที่ server ออก token</li>
+      <li><code>jti</code> (JWT ID): identifier ของ token ใบนี้ ใช้ประโยชน์กับการติดตาม/revocation</li>
+      <li><code>roles</code>, <code>perms</code>: snapshot จาก RBAC ที่ M2 สร้างไว้</li>
+    </ul>
+
+    <h2>Decode ต้อง verify เสมอ</h2>
+    <pre><code># ถูก: ระบุ algorithm ที่ยอมรับ และให้ library verify signature/exp
+jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+
+# ผิด: อ่าน payload โดยไม่ verify แล้วเชื่อข้อมูลในนั้น</code></pre>
+    <p>เมื่อ signature ผิดหรือ <code>exp</code> หมดอายุ PyJWT จะ raise error; JWT layer แปลงมันเป็น domain error แทนที่จะให้ endpoint แต่ละตัวจัดการเอง</p>
+
+    <h2>สิทธิ์ใน token เป็น snapshot</h2>
+    <p>เพราะ access token มี <code>perms</code> อยู่แล้ว M6 สามารถตรวจ permission ได้เร็วโดยไม่ query database ทุก request. Trade-off คือหาก admin เปลี่ยน role วันนี้ token เก่าจะยังมี snapshot เดิมจนหมดอายุ; แผนตั้ง access TTL ไว้ 15 นาทีเพื่อลดช่วงนี้</p>
+
+    <div class="quiz" data-quiz data-correct="A" data-success="ถูกต้อง — JWT signature ยืนยันความถูกต้องของข้อมูล แต่ payload ไม่ได้ถูกซ่อน" data-retry="ลองใหม่: แยก integrity (ถูกแก้หรือไม่) ออกจาก confidentiality (อ่านได้หรือไม่)">
+      <strong>Quiz: JWT ที่ signed ด้วย HS256 ปกป้อง payload ในเรื่องใดเป็นหลัก?</strong>
+      <p class="muted">A = กันการแก้ไข · B = ซ่อนข้อมูล · C = ทำให้ไม่หมดอายุ</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>ทำไม client จึงอ่าน payload ของ JWT ได้ แต่ยังไม่ควรแก้ <code>perms</code> ใน token เอง? อธิบายด้วย role ของ signature และ <code>JWT_SECRET</code></p>
+
+    <p>แหล่งหลัก: <a href="https://pyjwt.readthedocs.io/en/stable/usage.html">PyJWT usage guide</a> และ <a href="https://www.rfc-editor.org/rfc/rfc7519">RFC 7519</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/jwt-claims.html">reference: JWT claims</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะเปรียบเทียบ access token กับ refresh token และดู rotation/reuse detection ใน M5 ครับ</footer>
+  </main>
+</body>
+</html>

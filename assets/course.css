@@ -1,0 +1,29 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #1f2937;
+  background: #f5f3ef;
+}
+
+body { margin: 0; line-height: 1.65; }
+main { max-width: 48rem; margin: 0 auto; padding: 3rem 1.35rem 5rem; }
+.eyebrow { color: #9a3412; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .75rem; }
+h1, h2 { color: #172554; line-height: 1.2; }
+h1 { font-size: clamp(2rem, 7vw, 3.5rem); margin: .2rem 0 1rem; }
+h2 { font-size: 1.35rem; margin-top: 2.5rem; }
+.lede { font-size: 1.18rem; max-width: 42rem; }
+.card, .callout, .quiz { background: #fff; border: 1px solid #e7e5e4; border-radius: .75rem; padding: 1.1rem 1.25rem; margin: 1rem 0; box-shadow: 0 .2rem .8rem rgb(28 25 23 / 5%); }
+.callout { border-left: .35rem solid #ea580c; }
+code { color: #9a3412; background: #fff7ed; border-radius: .25rem; padding: .1rem .3rem; }
+pre { overflow-x: auto; background: #172554; color: #eff6ff; padding: 1rem; border-radius: .6rem; }
+pre code { color: inherit; background: transparent; padding: 0; }
+.flow { display: grid; gap: .5rem; margin: 1rem 0; }
+.flow div { padding: .7rem .9rem; border-radius: .5rem; background: #e0f2fe; font-weight: 650; }
+.flow div::after { content: "↓"; float: right; }
+.flow div:last-child::after { content: ""; }
+button { border: 0; border-radius: .45rem; padding: .5rem .85rem; margin-right: .35rem; background: #172554; color: white; cursor: pointer; font: inherit; }
+button:hover { background: #1d4ed8; }
+.feedback { font-weight: 650; min-height: 1.6rem; }
+.muted { color: #57534e; font-size: .92rem; }
+a { color: #c2410c; }
+footer { margin-top: 3rem; color: #57534e; font-size: .92rem; }

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 9 — Permission catalog และ seed data</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 9 · 12 minutes</p>
+    <h1>ใครเป็นเจ้าของชื่อ permission?</h1>
+    <p class="lede">Permission เช่น <code>users.read</code> เป็น contract ระหว่าง database, service และ API guard. ถ้าทุกที่พิมพ์ string เอง ความผิดพลาดจากการสะกดต่างกันจะกลายเป็น bug ด้านสิทธิ์</p>
+
+    <h2>Permission catalog = single source of truth</h2>
+    <pre><code># apps/authz/permissions.py (แนวคิด)
+class PermissionCode(StrEnum):
+    USERS_READ = "users.read"
+    USERS_UPDATE = "users.update"
+    ROLES_ASSIGN = "roles.assign"</code></pre>
+    <p>แทนที่จะให้ router เขียน <code>"users.read"</code>, service เขียน <code>"user.read"</code>, และ seed เขียน <code>"users_read"</code>, ทุกจุด import value จาก catalog เดียวกัน</p>
+    <div class="callout"><strong>ผล:</strong> เปลี่ยนชื่อหรือเพิ่ม code มีจุดตรวจหลักจุดเดียว และ IDE/type checker ช่วยหา reference ที่เกี่ยวข้องได้</div>
+
+    <h2>Code ในไฟล์ vs row ใน database</h2>
+    <div class="card">
+      <p><strong>Catalog ใน Python:</strong> บอกว่า application รองรับ permission code ใดบ้าง</p>
+      <p><strong>Permission row ใน database:</strong> ทำให้ role เชื่อมกับ code นั้นได้ และ query ได้</p>
+    </div>
+    <p>เราต้องมีทั้งสองอย่าง: code เป็น contract ที่ version-controlled; database row เป็น data ที่ relationships ใช้งานจริง</p>
+
+    <h2>Seed data ผ่าน data migration</h2>
+    <div class="flow">
+      <div>schema migration สร้าง Role, Permission, และ through tables</div>
+      <div>data migration สร้าง permission catalog เป็น rows</div>
+      <div>สร้าง role เริ่มต้น: <code>admin</code>, <code>user</code></div>
+      <div>สร้าง RolePermission ตาม policy เริ่มต้น</div>
+    </div>
+    <p>Data migration ถูก commit อยู่กับ code และรันด้วย <code>migrate</code>. ดังนั้น local, CI และ production ได้ catalog/roles เดียวกัน ไม่ต้องให้คนเข้า database แล้ว insert ด้วยมือ</p>
+
+    <h2>ตัวอย่าง policy เริ่มต้น</h2>
+    <pre><code>admin → ทุก permission ใน catalog
+user  → permission ขั้นต่ำสำหรับผู้ใช้ทั่วไป
+
+DEFAULT_USER_ROLE = "user"</code></pre>
+    <p>ใน M5 เมื่อคนสมัครใหม่ AuthService จะ assign role <code>user</code> อัตโนมัติ โดยอ่านชื่อ default จาก settings. นี่เชื่อม registration เข้ากับ RBAC โดยไม่ hard-code policy กระจัดกระจาย</p>
+
+    <h2>ทำไมไม่ seed ด้วยมือ?</h2>
+    <div class="card">
+      <p><strong>เพิ่มมือ:</strong> แต่ละ environment อาจมี role/permission ไม่เท่ากัน, ทำซ้ำยาก, audit ไม่ชัด</p>
+      <p><strong>data migration:</strong> ทำซ้ำได้, review ใน pull request ได้, และทุก environment มีประวัติเดียวกัน</p>
+    </div>
+
+    <div class="quiz" data-quiz data-correct="A" data-success="ถูกต้อง — permissions.py ให้ code หนึ่งชุดที่ API, service และ seed ใช้ร่วมกัน" data-retry="ลองใหม่: มองหาที่นิยาม code ครั้งเดียว ไม่ใช่ database rows ที่ถูกสร้างตามมา">
+      <strong>Quiz: อะไรควรเป็น single source of truth ของ permission code?</strong>
+      <p class="muted">A = permissions.py · B = API router strings · C = manual SQL</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>หาก API guard เช็ค <code>"users.read"</code> แต่ data seed สร้าง <code>"user.read"</code>, user ที่ role มี permission แถวหลังจะผ่าน guard หรือไม่? เพราะอะไร?</p>
+
+    <p>แหล่งหลัก: <a href="https://docs.djangoproject.com/en/5.2/topics/migrations/#data-migrations">Django data migrations (official docs)</a> และ <a href="../docs/adr/0001-rbac-role-permission-model.md">ADR 0001 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/permission-catalog-and-seed.html">reference: permission catalog and seed</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะต่อด้วยการ query ว่า user มี permission set ใดบ้างก่อนเข้าสู่ JWT</footer>
+  </main>
+</body>
+</html>

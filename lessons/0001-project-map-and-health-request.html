@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 1 — แผนที่โปรเจกต์และ health request</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 1 · 10 minutes</p>
+    <h1>ตามรอย request หนึ่งครั้ง</h1>
+    <p class="lede">เป้าหมายวันนี้: อธิบายได้ว่า <code>GET /api/health</code> วิ่งผ่านไฟล์ใดบ้างก่อนตอบ <code>{"status": "ok"}</code> นี่คือแผนที่ที่ใช้อ่านทุก feature ต่อจากนี้</p>
+
+    <h2>ภาพรวมก่อนเปิดไฟล์</h2>
+    <div class="flow">
+      <div>Uvicorn</div>
+      <div><code>config/asgi.py</code></div>
+      <div><code>config/settings/dev.py</code> → <code>base.py</code></div>
+      <div><code>config/urls.py</code></div>
+      <div><code>config/api.py</code></div>
+    </div>
+    <p>อย่าจำเป็นรายไฟล์ ให้จำหน้าที่: <strong>เริ่ม server → โหลดกติกา → เลือก URL → ทำ endpoint</strong></p>
+
+    <h2>เปิดตามลำดับนี้</h2>
+    <div class="card">
+      <ol>
+        <li><code>config/asgi.py</code> สร้าง callable ชื่อ <code>application</code>; Uvicorn เรียกมันเมื่อรับ HTTP request</li>
+        <li><code>config/settings/base.py</code> อ่าน environment, ตั้ง <code>ROOT_URLCONF = "config.urls"</code></li>
+        <li><code>config/urls.py</code> มี <code>path("api/", api.urls)</code>; ทุก path ที่ขึ้นต้น <code>/api/</code> ถูกส่งให้ Django Ninja</li>
+        <li><code>config/api.py</code> มี <code>@api.get("/health")</code>; Ninja จับคู่ส่วนท้าย <code>/health</code> แล้วเรียก function <code>health</code></li>
+      </ol>
+    </div>
+    <div class="callout"><strong>จุดที่มักสับสน:</strong> <code>api/</code> อยู่ใน Django URL config แต่ <code>/health</code> อยู่ใน Ninja API. ต่อกันแล้วจึงเป็น <code>/api/health</code> และตามค่าเริ่มต้น Ninja ใช้ URL ไม่มี trailing slash</div>
+
+    <h2>ลองทำเอง (2 นาที)</h2>
+    <p>โดยไม่ดูคำตอบ: URL <code>/api/health</code> ถูกประกอบจาก <em>สอง</em> string ใด และอยู่ในไฟล์ใดบ้าง?</p>
+    <details class="card">
+      <summary>เปิดเฉลยหลังลองตอบ</summary>
+      <p><code>"api/"</code> ใน <code>config/urls.py</code> + <code>"/health"</code> ใน <code>config/api.py</code></p>
+    </details>
+
+    <div class="quiz" data-quiz data-correct="A" data-success="ถูกต้อง — ASGI application คือประตูที่ Uvicorn เรียก" data-retry="ลองใหม่: ถามว่า Uvicorn เรียกไฟล์ใดก่อน URL routing">
+      <strong>Quiz: เมื่อ Uvicorn รับ request ไฟล์ใดเป็น entry point?</strong>
+      <p class="muted">A = config/asgi.py · B = config/urls.py · C = config/api.py</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>อ้างอิงและก้าวถัดไป</h2>
+    <p>อ่าน <a href="https://docs.djangoproject.com/en/5.2/topics/http/urls/">Django URL dispatcher (official docs)</a> เฉพาะส่วน URL patterns ประมาณ 5 นาที แล้วกลับมาลองอธิบาย flow ข้างบนด้วยคำของคุณเอง</p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/request-flow.html">reference: request flow</a></p>
+    <footer>ถามผมได้ทันทีว่า “<em>อธิบายไฟล์ X ทีละบรรทัด</em>” หรือส่งคำอธิบาย flow ของคุณมาให้ผมช่วยตรวจ ก่อนไป lesson ถัดไป</footer>
+  </main>
+</body>
+</html>

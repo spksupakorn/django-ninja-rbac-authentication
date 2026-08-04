@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Async repository</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Async repository boundary</h1>
+    <div class="flow">
+      <div>Service เรียก repository method</div>
+      <div>Repository ทำ async ORM query เช่น <code>aget</code>, <code>acreate</code>, <code>afirst</code></div>
+      <div><code>await</code> รอ database I/O โดยไม่ block event loop</div>
+      <div>Repository คืน model หรือ <code>None</code> ให้ service</div>
+    </div>
+    <p><strong>กฎ:</strong> query ORM ที่ execute ใน async path ต้องใช้ async variant และอยู่ใน repository.</p>
+  </main>
+</body>
+</html>

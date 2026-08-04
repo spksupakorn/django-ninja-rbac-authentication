@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Testing, CI and production</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Quality gates ของ Phase 1</h1>
+    <div class="flow">
+      <div>Unit tests: password, JWT, AuthService และ edge cases</div>
+      <div>Integration tests: endpoint + auth guard + test database</div>
+      <div>Factory data: fixtures ที่อ่านง่ายและ reusable</div>
+      <div>CI: ruff + mypy + pytest ต้องผ่านก่อน merge</div>
+      <div>Production settings: DEBUG=False, hosts, secure cookies/headers</div>
+    </div>
+    <p><strong>Definition of done:</strong> test ที่ตรงกับความเสี่ยงผ่านได้ซ้ำใน CI และ production config ไม่เปิด debug/security defaults ที่อ่อนเกินไป.</p>
+  </main>
+</body>
+</html>

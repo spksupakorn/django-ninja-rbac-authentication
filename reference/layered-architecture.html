@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Layered architecture</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>API → Service → Repository → Model</h1>
+    <div class="flow">
+      <div>API: HTTP, schemas, validation, response</div>
+      <div>Service: business rules และ orchestration</div>
+      <div>Repository: async ORM queries เท่านั้น</div>
+      <div>Model: database schema และ persistence</div>
+    </div>
+    <p><strong>กฎ:</strong> router ไม่ query ORM โดยตรง; service ไม่รู้จัก HTTP; repository เป็นจุดเดียวที่เขียน ORM query.</p>
+  </main>
+</body>
+</html>

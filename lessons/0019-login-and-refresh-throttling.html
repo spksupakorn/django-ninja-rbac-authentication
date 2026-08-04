@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 19 — Login และ refresh throttling</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 19 · 12 minutes</p>
+    <h1>ทำไม login ต้องมี rate limit?</h1>
+    <p class="lede">Argon2 ทำให้การเดา password หนึ่งครั้งมีต้นทุน แต่ attacker ยังส่ง request ซ้ำจำนวนมากได้. Throttling จำกัดจำนวนครั้งที่ endpoint sensitive ถูกเรียกในช่วงเวลาเพื่อช่วยลด brute-force และ credential stuffing</p>
+
+    <h2>Policy ใน ADR</h2>
+    <pre><code>THROTTLE_LOGIN = "5/minute"
+
+ป้องกัน:
+POST /auth/login
+POST /auth/refresh</code></pre>
+    <p>ความหมายคือ IP หนึ่งเรียก endpoint ประเภทนี้ได้ไม่เกิน 5 ครั้งต่อหนึ่งนาทีตาม policy ที่ M6 จะ implement. เมื่อเกิน ต้องตอบ <strong>429 Too Many Requests</strong> แทนที่จะรัน password/token validation ต่อ</p>
+
+    <h2>ไม่ใช่แค่ password ผิด</h2>
+    <div class="card">
+      <p><strong>Brute-force:</strong> ลอง passwords หลายค่าใน account หนึ่ง</p>
+      <p><strong>Credential stuffing:</strong> ลอง email/password pairs ที่รั่วมาจากระบบอื่นจำนวนมาก</p>
+      <p><strong>Refresh abuse:</strong> ทดลองหรือยิง refresh endpoint ซ้ำอย่างรวดเร็ว</p>
+    </div>
+    <p>จึง throttle ที่ขอบ API ก่อนงาน expensive อย่าง Argon2 verify และ database lookup มากเกินไป</p>
+
+    <h2>Flow ของ request</h2>
+    <div class="flow">
+      <div>รับ IP และระบุ endpoint ที่ต้อง limit</div>
+      <div>ตรวจ counter ใน time window</div>
+      <div>ถ้ายังเหลือ quota → รัน AuthService</div>
+      <div>ถ้าเกิน quota → 429 โดยไม่เรียก AuthService</div>
+    </div>
+    <p>การ limit ต่อ email เพิ่มเติมช่วยกรณี attacker กระจาย request ผ่านหลาย IP เพื่อโจมตี account เดียว; ADR ระบุให้เพิ่มเมื่อ implement</p>
+
+    <h2>401 vs 429</h2>
+    <pre><code>password/token ไม่ถูกต้อง → 401
+token valid แต่ไม่มี permission → 403
+เรียก endpoint เกิน rate limit → 429</code></pre>
+    <p>429 ไม่ได้บอกว่า credentials ถูกหรือผิด; มันบอกว่า client ต้องชะลอการส่ง request</p>
+
+    <h2>ข้อจำกัดของ in-memory throttle</h2>
+    <pre><code>web instance A: counter IP X = 5
+web instance B: counter IP X = 0</code></pre>
+    <p>ถ้ามีหลาย server แต่ละ process มี memory ของตนเอง attacker อาจสลับไปยิงหลาย instances แล้วหลบ limit ได้. สำหรับ Phase 1 ยอมรับข้อจำกัดนี้เพื่อลด infrastructure; Phase 2 ควรใช้ shared backend เช่น Redis</p>
+    <div class="callout"><strong>อย่ามอง throttle เป็นการป้องกันชั้นเดียว:</strong> มันทำงานร่วมกับ Argon2, generic login errors และ dummy verify ที่เรียนมาแล้ว</div>
+
+    <div class="quiz" data-quiz data-correct="A" data-success="ถูกต้อง — 429 ระบุว่าคำขอถูกจำกัดด้วย rate limit ไม่ใช่ว่า identity หรือ permission ผิด" data-retry="ลองใหม่: แยก credential failure (401) กับ permission failure (403) และ rate limit (429)">
+      <strong>Quiz: login ถูกเรียกเกิน 5 ครั้ง/นาทีจาก IP เดียว ควรตอบ status ใด?</strong>
+      <p class="muted">A = 429 · B = 401 · C = 403</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>เหตุใด in-memory throttle จึงอ่อนลงเมื่อเรา scale web service จาก 1 instance เป็น 3 instances?</p>
+
+    <p>แหล่งหลัก: <a href="../docs/adr/0006-login-security-hardening.md">ADR 0006 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/auth-throttling.html">reference: auth throttling</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะเริ่ม M7: API endpoints, schemas และ OpenAPI docs ครับ</footer>
+  </main>
+</body>
+</html>

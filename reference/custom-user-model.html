@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Custom User model</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Custom User ก่อน migration แรก</h1>
+    <div class="flow">
+      <div>เลือก identity: email แทน username</div>
+      <div>สร้าง <code>accounts.User</code> และ <code>UserManager</code></div>
+      <div>ตั้ง <code>AUTH_USER_MODEL = "accounts.User"</code></div>
+      <div>สร้าง initial migration ของ accounts</div>
+      <div>migrate แล้ว model อื่นอ้างอิง user model นี้</div>
+    </div>
+    <div class="callout"><strong>กฎ:</strong> ตั้ง <code>AUTH_USER_MODEL</code> ก่อนสร้าง migration ใด ๆ ที่เกี่ยวกับ user. การสลับ user model หลังมี migrations/data แล้วเป็นงาน migration ที่ซับซ้อน</div>
+  </main>
+</body>
+</html>

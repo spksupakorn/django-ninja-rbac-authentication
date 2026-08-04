@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — Permission resolution</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>Resolve permissions ของ User</h1>
+    <div class="flow">
+      <div>หา roles จาก <code>UserRole</code> ของ user</div>
+      <div>หา permissions ของ roles เหล่านั้นจาก <code>RolePermission</code></div>
+      <div>ดึง <code>Permission.code</code></div>
+      <div>รวมเป็น <code>set[str]</code> เพื่อตัด code ซ้ำ</div>
+    </div>
+    <p>ตัวอย่าง: roles = {manager, auditor} → permissions = {reports.read, users.read}</p>
+  </main>
+</body>
+</html>

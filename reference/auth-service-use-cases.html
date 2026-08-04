@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — AuthService use cases</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Quick reference</p>
+    <h1>AuthService use cases</h1>
+    <div class="flow">
+      <div>register → create User + assign default role</div>
+      <div>login → verify password + create access/refresh family</div>
+      <div>refresh → validate record + rotate refresh + issue new pair</div>
+      <div>logout → revoke current refresh token</div>
+    </div>
+    <p><strong>กฎ:</strong> service ประสาน business flow; router ไม่แตะ ORM หรือ token persistence โดยตรง.</p>
+  </main>
+</body>
+</html>

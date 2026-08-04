@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lesson 13 — Domain exceptions และ HTTP mapping</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script defer src="../assets/quiz.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Lesson 13 · 12 minutes</p>
+    <h1>Business failure ไม่ใช่ HTTP response</h1>
+    <p class="lede">เมื่อ service พบว่า login ไม่ถูก, email ซ้ำ หรือไม่มีสิทธิ์ มันควรส่ง “ความหมายของปัญหา” ออกมา ไม่ใช่สร้าง JSON/HTTP response เอง. API layer เป็นผู้แปลความหมายนั้นให้ client</p>
+
+    <h2>Domain exception คืออะไร?</h2>
+    <pre><code># apps/common/exceptions.py (แนวคิด)
+class InvalidCredentials(Exception): pass
+class TokenReused(Exception): pass
+class PermissionDenied(Exception): pass
+class EmailAlreadyExists(Exception): pass</code></pre>
+    <p>ชื่อ exception บอกกติกาธุรกิจที่ล้มเหลว. มันไม่พูดถึง HTTP, JSON, Ninja หรือ status code จึงใช้ซ้ำได้จาก API, CLI หรือ background task</p>
+
+    <h2>ตัวอย่าง register flow</h2>
+    <pre><code>API router → AuthService.register(email, password)
+              ↓
+        พบ email ซ้ำ
+              ↓
+        raise EmailAlreadyExists
+              ↓
+Ninja exception handler → HTTP 409 {"detail": "Email already exists"}</code></pre>
+    <p>Service ไม่ return <code>Response(..., status=409)</code>. การ map 409 อยู่ที่ exception handler กลาง ซึ่งทำให้ทุก endpoint ตอบ format เดียวกัน</p>
+
+    <h2>Mapping ของโปรเจกต์</h2>
+    <div class="card">
+      <p><code>InvalidCredentials</code> → <strong>401 Unauthorized</strong></p>
+      <p><code>PermissionDenied</code> → <strong>403 Forbidden</strong></p>
+      <p><code>EmailAlreadyExists</code> → <strong>409 Conflict</strong></p>
+      <p><code>TokenReused</code> → <strong>401 Unauthorized</strong></p>
+    </div>
+    <p>401 หมายถึง identity/credentials ใช้ไม่ได้; 403 หมายถึงรู้ว่า caller คือใคร แต่เขาไม่มี permission ที่ต้องใช้</p>
+
+    <h2>ข้อดีของ handler กลาง</h2>
+    <div class="flow">
+      <div>Service ทุกตัว raise exception แบบเดียวกัน</div>
+      <div>API มี mapping status code อยู่จุดเดียว</div>
+      <div>client ได้ error JSON รูปแบบสม่ำเสมอ</div>
+      <div>เปลี่ยน HTTP format ไม่ต้องแก้ business logic</div>
+    </div>
+
+    <h2>Security: อย่าเปิดข้อมูลเกินจำเป็น</h2>
+    <p>ตอน login, ไม่ว่า email ไม่มีจริงหรือ password ผิด service ควร raise <code>InvalidCredentials</code> เดียวกัน และ API ตอบ 401 แบบกลาง ๆ. ไม่ควรบอกว่า “email นี้ไม่มีในระบบ” เพราะช่วย attacker เดา account ที่มีอยู่ได้</p>
+    <div class="callout"><strong>แยกความรับผิดชอบ:</strong> service ตัดสินว่า failure คืออะไร; API handler ตัดสินว่าจะเปิดเผย message ระดับใดให้ client เห็น</div>
+
+    <div class="quiz" data-quiz data-correct="C" data-success="ถูกต้อง — 403 คือ caller ถูกระบุตัวตนแล้ว แต่ไม่มีสิทธิ์ทำ action นี้" data-retry="ลองใหม่: แยกกรณี credential ใช้ไม่ได้ (401) ออกจากกรณีมี identity แต่ไม่มี permission">
+      <strong>Quiz: User login สำเร็จ แต่ไม่มี <code>roles.assign</code>; API ควรตอบอะไร?</strong>
+      <p class="muted">A = 401 · B = 409 · C = 403</p>
+      <button type="button" data-answer="A">A</button><button type="button" data-answer="B">B</button><button type="button" data-answer="C">C</button>
+      <p class="feedback" aria-live="polite"></p>
+    </div>
+
+    <h2>ลองอธิบายกลับ</h2>
+    <p>เหตุใด login ที่ email ไม่พบและ password ผิดจึงควรตอบ <code>InvalidCredentials</code> เหมือนกัน แทนที่จะบอก client ว่าเกิดกรณีใด?</p>
+
+    <p>แหล่งหลัก: <a href="../docs/adr/0003-layered-architecture.md">ADR 0003 ของโปรเจกต์</a> และ <a href="../docs/adr/0006-login-security-hardening.md">ADR 0006 ของโปรเจกต์</a></p>
+    <p>เก็บไว้ดูเร็ว: <a href="../reference/domain-errors.html">reference: domain errors</a></p>
+    <footer>ส่งคำตอบท้ายบทมาได้เลย แล้วเราจะเริ่ม M4: password hashing และ JWT core ครับ</footer>
+  </main>
+</body>
+</html>
