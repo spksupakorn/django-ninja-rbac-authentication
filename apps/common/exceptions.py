@@ -27,6 +27,12 @@ class TokenReused(DomainError):
     default_detail = "This refresh token has already been used."
 
 
+class InvalidToken(DomainError):
+    status_code = 401
+    code = "invalid_token"
+    default_detail = "The token is invalid or expired."
+
+
 class PermissionDenied(DomainError):
     status_code = 403
     code = "permission_denied"

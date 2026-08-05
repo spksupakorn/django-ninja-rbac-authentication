@@ -1,5 +1,7 @@
 import pytest
+from django.db import IntegrityError
 
+from apps.accounts.models import User
 from apps.accounts.repositories.users import UserRepository
 from apps.authz.models import Permission, Role
 from apps.authz.repositories.rbac import AuthzRepository
@@ -14,6 +16,17 @@ async def test_user_repository_creates_and_finds_canonical_email() -> None:
 
     assert await repository.aget_by_email("USER@EXAMPLE.COM") == created
     assert await repository.aget_or_none(email="missing@example.com") is None
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+async def test_create_user_with_role_rolls_back_when_role_link_fails() -> None:
+    with pytest.raises(IntegrityError):
+        await AuthzRepository().acreate_user_with_role(
+            email="orphan@example.com", password_hash="hash", role_id=999_999
+        )
+
+    assert not await User.objects.filter(email="orphan@example.com").aexists()
 
 
 @pytest.mark.django_db(transaction=True)

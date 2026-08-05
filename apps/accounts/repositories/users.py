@@ -16,3 +16,8 @@ class UserRepository(BaseRepository[User]):
         """Look up an email identity without making callers know ORM syntax."""
         canonical_email = User.objects.normalize_email(email)
         return await self.aget_or_none(email=canonical_email)
+
+    async def acreate_user(self, *, email: str, password_hash: str) -> User:
+        """Persist a user with a password hash produced by the security layer."""
+        canonical_email = User.objects.normalize_email(email)
+        return await self.acreate(email=canonical_email, password=password_hash)
