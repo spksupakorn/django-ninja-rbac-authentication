@@ -36,6 +36,31 @@ class AuthzRepository:
         except Role.DoesNotExist:
             return None
 
+    async def aget_role_by_id(self, role_id: int) -> Role | None:
+        """Find a role by its primary key."""
+        try:
+            return await Role.objects.aget(id=role_id)
+        except Role.DoesNotExist:
+            return None
+
+    async def alist_roles(self, *, offset: int, limit: int) -> list[Role]:
+        """Return a stable page of roles."""
+        roles = Role.objects.order_by("id")[offset : offset + limit]
+        return [role async for role in roles]
+
+    async def acount_roles(self) -> int:
+        """Count roles for pagination metadata."""
+        return await Role.objects.acount()
+
+    async def alist_permissions(self, *, offset: int, limit: int) -> list[Permission]:
+        """Return a stable page of permissions."""
+        permissions = Permission.objects.order_by("code")[offset : offset + limit]
+        return [permission async for permission in permissions]
+
+    async def acount_permissions(self) -> int:
+        """Count permissions for pagination metadata."""
+        return await Permission.objects.acount()
+
     async def aget_user_permission_codes(self, user_id: int) -> set[str]:
         """Return all distinct permission codes inherited by a user through roles."""
         permission_codes = Permission.objects.filter(

@@ -28,5 +28,5 @@ class RoleName(StrEnum):
 PERMISSION_CATALOG: Final = tuple(permission.value for permission in PermissionCode)
 DEFAULT_ROLE_PERMISSIONS: Final = {
     RoleName.ADMIN.value: PERMISSION_CATALOG,
-    RoleName.USER.value: (PermissionCode.USER_READ.value,),
+    RoleName.USER.value: (),
 }

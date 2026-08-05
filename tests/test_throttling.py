@@ -10,7 +10,7 @@ from apps.common.throttling import LoginRateThrottle
 def test_login_rate_throttle_limits_requests_by_ip() -> None:
     cache.clear()
     throttle = LoginRateThrottle(rate="2/minute")
-    request = RequestFactory().post("/api/auth/login", REMOTE_ADDR="203.0.113.1")
+    request = RequestFactory().post("/api/v1/auth/login", REMOTE_ADDR="203.0.113.1")
 
     assert throttle.allow_request(request)
     assert throttle.allow_request(request)

@@ -82,3 +82,36 @@ def test_token_missing_required_claim_is_rejected() -> None:
 
     with pytest.raises(InvalidToken):
         decode_access_token(forged, secret=TEST_SECRET)
+
+
+@pytest.mark.parametrize(
+    ("claim", "value"),
+    [
+        ("sub", ""),
+        ("jti", ""),
+        ("roles", "admin"),
+        ("perms", ["user.read", 42]),
+        ("iat", "invalid"),
+        ("exp", "invalid"),
+    ],
+)
+def test_malformed_custom_claim_is_rejected(claim: str, value: object) -> None:
+    forged = pyjwt.encode(
+        {**_FAR_FUTURE_CLAIMS, "roles": [], "perms": [], claim: value},
+        TEST_SECRET,
+        algorithm="HS256",
+    )
+
+    with pytest.raises(InvalidToken):
+        decode_access_token(forged, secret=TEST_SECRET)
+
+
+def test_encode_access_token_rejects_naive_timestamp() -> None:
+    with pytest.raises(ValueError, match="timezone-aware"):
+        encode_access_token(
+            subject=42,
+            roles=[],
+            permissions=[],
+            secret=TEST_SECRET,
+            now=datetime.now(),
+        )

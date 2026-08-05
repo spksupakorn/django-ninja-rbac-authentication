@@ -1,141 +1,105 @@
 # Django Ninja RBAC Authentication
 
-Backend สำหรับ JWT authentication และ role-based access control (RBAC) ที่สร้างด้วย
-Django Ninja และ ASGI runtime
+Backend สำหรับ JWT authentication และ role-based access control (RBAC) บน Django Ninja/ASGI
 
 ## สิ่งที่ต้องมี
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) พร้อม Docker Compose v2
-- [uv](https://docs.astral.sh/uv/) (เมื่อต้องการรัน tooling หรือแอปบนเครื่อง)
-- Python 3.12 ขึ้นไป (uv จะจัดการ Python ที่ต้องใช้ให้ได้)
+- Docker Desktop พร้อม Docker Compose v2 สำหรับการรันแบบ container
+- [uv](https://docs.astral.sh/uv/) สำหรับ tooling บนเครื่อง
+- Python **3.12.13** เมื่อรันบนเครื่อง (ช่วงเวอร์ชันถูกบังคับใน `pyproject.toml`)
 
-## เริ่มต้นสำหรับ local development
+## เริ่มต้นด้วย Docker
 
-1. สร้างไฟล์ environment จาก template แล้วเปลี่ยน `DJANGO_SECRET_KEY` และ `JWT_SECRET`
-   เป็นค่าสุ่มคนละค่า โดยแต่ละค่าต้องยาวอย่างน้อย 32 ตัวอักษร
+1. สร้าง environment file และเปลี่ยน secret ทั้งสองค่าเป็นค่าสุ่มคนละค่า ความยาวอย่างน้อย 32 ตัวอักษร
 
    ```sh
    cp .env.example .env
    ```
 
-2. Build และเริ่มทั้ง web service กับ PostgreSQL ในเบื้องหลัง
+2. Build และเริ่ม PostgreSQL กับ API
 
    ```sh
    docker compose up --build -d
    ```
 
-   Compose จะรอให้ PostgreSQL พร้อมใช้งานก่อนจึงเริ่ม web service
-
-3. ตรวจสถานะและเรียก health endpoint
+3. รัน migration (รวม RBAC catalog/role seed) แล้วตรวจ health
 
    ```sh
-   docker compose ps
-   curl http://localhost:8000/api/health
+   docker compose exec web python manage.py migrate
+   curl http://localhost:8000/api/v1/health
    ```
 
-   ควรได้ผลลัพธ์:
+   ผลลัพธ์คือ `{"status":"ok"}` และ OpenAPI อยู่ที่ [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
 
-   ```json
-   {"status": "ok"}
-   ```
-
-4. เปิด API documentation ที่ [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
-
-> Health endpoint ใช้ URL ไม่มี trailing slash: `/api/health`
-
-## คำสั่งใช้งานประจำวัน
-
-ดู log ของ service:
+คำสั่งที่ใช้บ่อย:
 
 ```sh
 docker compose logs -f web
-docker compose logs -f db
-```
-
-รัน Django management command ภายใน container:
-
-```sh
-docker compose exec web uv run --no-sync python manage.py check
-docker compose exec web uv run --no-sync python manage.py migrate
-```
-
-ปิด service โดยเก็บข้อมูล PostgreSQL ไว้:
-
-```sh
+docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py check
 docker compose down
 ```
 
-เมื่อต้องการล้าง database สำหรับ development แล้วเริ่มใหม่:
+`docker compose down -v` ลบ PostgreSQL volume อย่างถาวร ใช้เฉพาะเมื่อต้องการ reset ข้อมูล development
+
+## API หลัก
+
+| Method | Path | หน้าที่ |
+| --- | --- | --- |
+| POST | `/api/v1/auth/register` | สมัคร user และ assign role เริ่มต้น |
+| POST | `/api/v1/auth/login` | รับ access/refresh token |
+| POST | `/api/v1/auth/refresh` | rotate refresh token |
+| POST | `/api/v1/auth/logout` | revoke refresh token ปัจจุบัน |
+| GET | `/api/v1/auth/me` | ดู claims จาก access token |
+| CRUD | `/api/v1/admin/users` | จัดการ user (ต้องมี permission) |
+| POST | `/api/v1/admin/users/{id}/roles` | assign role (ต้องมี `role.assign`) |
+| GET | `/api/v1/admin/roles`, `/api/v1/admin/permissions` | ดู RBAC catalog (ต้องมี permission) |
+
+ส่ง access token ด้วย `Authorization: Bearer <access-token>` ทุก endpoint ที่ป้องกันไว้
+การแก้ role/permission จะมีผลกับ access token ที่ออกใหม่; token เดิมอาจคง claims ได้นานสูงสุดตาม `ACCESS_TTL`
+
+role `admin` ที่ seed จาก migration ได้ permission catalog ทั้งหมด ส่วน role เริ่มต้น `user`
+ไม่มี collection-level admin permission โดยตั้งใจ จึงเข้าถึง `/api/v1/admin/*` ไม่ได้จนกว่าจะได้รับสิทธิ์เพิ่ม
+
+## รันบนเครื่องและทดสอบ
+
+ติดตั้ง dependency development:
 
 ```sh
-docker compose down -v
-docker compose up --build -d
+uv sync --frozen --group dev
 ```
 
-คำสั่ง `down -v` จะลบข้อมูลใน database volume อย่างถาวร
-
-## รัน tooling บนเครื่อง
-
-ติดตั้ง dependency กลุ่ม development หนึ่งครั้ง:
+สร้าง `.env` ให้ `DATABASE_URL` ชี้ PostgreSQL ที่เข้าถึงได้ (เมื่อรันบน host ใช้ `localhost` แทน `db`) แล้วรัน:
 
 ```sh
-uv sync --group dev
-```
-
-จากนั้นใช้คำสั่งเหล่านี้:
-
-```sh
+uv run python manage.py migrate
+uv run uvicorn config.asgi:application --reload --host 127.0.0.1 --port 8000
 uv run ruff check .
 uv run mypy
-uv run pytest
-```
-- uv 
-## รัน app บนเครื่องโดยไม่ใช้ Docker
-
-ติดตั้งและเริ่ม PostgreSQL บนเครื่องก่อน (M1 เป็นต้นไป app จะเชื่อมต่อ database จริง)
-จากนั้นสร้าง `.env` และตั้ง URL ให้ชี้ไปที่ host ของเครื่อง:
-
-```dotenv
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rbac_auth
+uv run pytest --cov --cov-report=term-missing
 ```
 
-เริ่ม ASGI development server พร้อม auto-reload:
-
-```sh
-uv run uvicorn config.asgi:application --reload --host 127.0.0.1 --port 8000
-```
-
-เข้าใช้งานได้ที่ [http://127.0.0.1:8000/api/docs](http://127.0.0.1:8000/api/docs)
-และตรวจ liveness ได้ด้วย `curl http://127.0.0.1:8000/api/health`
-
-การทดสอบหรือคำสั่ง Django อ่านค่า config จาก `.env` ด้วย ดังนั้นให้สร้างไฟล์นี้ก่อนเสมอ
-ค่า default ใน `.env.example` ใช้ hostname `db` ซึ่งมีไว้สำหรับ web container ใน Docker Compose;
-ให้เปลี่ยนเป็น `localhost` เมื่อรัน service บน host
+test suite ใช้ PostgreSQL จริง และ CI บังคับ lint, type check และ service coverage อย่างน้อย 90%.
+Factory สำหรับ test อยู่ที่ `tests/factories.py`; ใช้สร้าง model fixture ที่ reusable ใน test แบบ synchronous
 
 ## Environment configuration
 
 | Variable | ความหมาย | ค่า default |
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection URL | ต้องกำหนด |
-| `DJANGO_SECRET_KEY` | Django signing secret, แยกจาก JWT และอย่างน้อย 32 ตัวอักษร | ต้องกำหนด |
-| `JWT_SECRET` | JWT signing secret, แยกจาก Django secret และอย่างน้อย 32 ตัวอักษร | ต้องกำหนด |
-| `ACCESS_TTL` | อายุ access token | `15m` |
+| `DJANGO_SECRET_KEY` | Django signing secret; ต้องแยกจาก JWT secret | ต้องกำหนด |
+| `JWT_SECRET` | HS256 JWT signing secret; ต้องแยกจาก Django secret | ต้องกำหนด |
+| `ACCESS_TTL` | อายุ access token (`15m`, `1h`, `7d`) | `15m` |
 | `REFRESH_TTL` | อายุ refresh token | `7d` |
-| `DEFAULT_USER_ROLE` | role ที่ assign ให้ user ใหม่ | `user` |
-| `THROTTLE_LOGIN` | ขีดจำกัด login per IP | `5/minute` |
-| `ALLOWED_HOSTS` | โดเมน/IP ที่อนุญาตบน production (คั่นด้วย comma) | ต้องกำหนดบน production |
+| `DEFAULT_USER_ROLE` | role ที่ assign ระหว่าง register/create user | `user` |
+| `THROTTLE_LOGIN` | rate limit ต่อ IP ของ login/refresh | `5/minute` |
+| `ALLOWED_HOSTS` | domain/IP production คั่นด้วย comma | ต้องกำหนดใน production |
 | `DJANGO_SETTINGS_MODULE` | settings module ที่ใช้ boot | `config.settings.dev` |
 
-`config.settings.prod` เปิด secure-cookie, HSTS และ HTTPS redirect สำหรับ production;
-ห้ามนำค่า secret ตัวอย่างไปใช้งานจริง
+`config.settings.prod` บังคับ `DEBUG=False`, `ALLOWED_HOSTS`, HTTPS redirect, secure cookies,
+HSTS, `nosniff` และ referrer policy. กำหนด TLS ที่ reverse proxy/load balancer ให้เสร็จก่อนเปิดใช้ production settings.
 
-## โครงสร้างโดยย่อ
+## RBAC seed และการเปลี่ยน catalog
 
-```text
-config/             Django settings, ASGI, URL routing และ Ninja API root
-apps/accounts/      custom user domain (จะเริ่มใน M1)
-apps/authz/         role, permission และ JWT domain
-apps/common/        shared primitives
-docker/             Dockerfile สำหรับ ASGI service
-tests/              automated tests
-```
+Permission catalog ถูก freeze ใน data migration เพื่อให้ migration reproducible. เมื่อเพิ่ม permission
+ให้เพิ่ม migration ใหม่เพื่อ seed/grant permission นั้น ไม่ควรแก้ migration เก่า. รายละเอียดการตัดสินใจอยู่ใน [docs/adr](docs/adr/README.md).

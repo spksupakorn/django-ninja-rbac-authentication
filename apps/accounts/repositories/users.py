@@ -21,3 +21,30 @@ class UserRepository(BaseRepository[User]):
         """Persist a user with a password hash produced by the security layer."""
         canonical_email = User.objects.normalize_email(email)
         return await self.acreate(email=canonical_email, password=password_hash)
+
+    async def aget_by_id(self, user_id: int) -> User | None:
+        """Find a user by its primary key."""
+        return await self.aget_or_none(id=user_id)
+
+    async def alist(self, *, offset: int, limit: int) -> list[User]:
+        """Return a stable page of users."""
+        users = User.objects.order_by("id")[offset : offset + limit]
+        return [user async for user in users]
+
+    async def acount(self) -> int:
+        """Count all users for pagination metadata."""
+        return await User.objects.acount()
+
+    async def aupdate(self, user_id: int, **fields: object) -> User | None:
+        """Update a user and return its current state."""
+        if "email" in fields:
+            fields["email"] = User.objects.normalize_email(str(fields["email"]))
+        updated = await User.objects.filter(id=user_id).aupdate(**fields)
+        if not updated:
+            return None
+        return await self.aget_by_id(user_id)
+
+    async def adelete(self, user_id: int) -> bool:
+        """Delete a user by primary key."""
+        deleted, _ = await User.objects.filter(id=user_id).adelete()
+        return deleted > 0

@@ -43,3 +43,9 @@ class EmailAlreadyExists(DomainError):
     status_code = 409
     code = "email_already_exists"
     default_detail = "An account with this email already exists."
+
+
+class ResourceNotFound(DomainError):
+    status_code = 404
+    code = "not_found"
+    default_detail = "The requested resource was not found."

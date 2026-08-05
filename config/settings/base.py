@@ -6,8 +6,8 @@ import re
 from datetime import timedelta
 from pathlib import Path
 from typing import Final
-from urllib.parse import urlparse
 
+import dj_database_url
 from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -53,11 +53,15 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def validate_database_url(cls, value: str) -> str:
-        parsed = urlparse(value)
+        try:
+            database_config = dj_database_url.parse(value)
+        except ValueError as exc:
+            msg = "DATABASE_URL must be a valid PostgreSQL URL"
+            raise ValueError(msg) from exc
         if (
-            parsed.scheme not in {"postgres", "postgresql"}
-            or not parsed.hostname
-            or not parsed.path
+            database_config.get("ENGINE") != "django.db.backends.postgresql"
+            or not database_config.get("HOST")
+            or not database_config.get("NAME")
         ):
             msg = "DATABASE_URL must be a PostgreSQL URL, e.g. postgresql://user:pass@host:5432/db"
             raise ValueError(msg)
@@ -86,7 +90,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()  # type: ignore[call-arg]
-_database_url = urlparse(settings.database_url)
 
 SECRET_KEY = settings.django_secret_key.get_secret_value()
 DEBUG = False
@@ -135,16 +138,7 @@ TEMPLATES = [
     },
 ]
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": _database_url.path.lstrip("/"),
-        "USER": _database_url.username,
-        "PASSWORD": _database_url.password,
-        "HOST": _database_url.hostname,
-        "PORT": _database_url.port or 5432,
-    }
-}
+DATABASES = {"default": dj_database_url.parse(settings.database_url, conn_max_age=0)}
 
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",

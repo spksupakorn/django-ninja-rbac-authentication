@@ -6,5 +6,6 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 coverage.xml
+.coverage
 htmlcov/
 postgres_data/

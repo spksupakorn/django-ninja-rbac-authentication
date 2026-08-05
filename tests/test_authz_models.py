@@ -11,7 +11,7 @@ def test_seed_catalog_grants_every_permission_to_admin() -> None:
 
 
 def test_seed_catalog_grants_minimum_permission_to_default_user() -> None:
-    assert DEFAULT_ROLE_PERMISSIONS[RoleName.USER] == ("user.read",)
+    assert DEFAULT_ROLE_PERMISSIONS[RoleName.USER] == ()
 
 
 @pytest.mark.django_db(transaction=True)

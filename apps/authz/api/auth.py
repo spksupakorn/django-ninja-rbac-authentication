@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import wraps
@@ -46,12 +47,24 @@ class JWTAuth(HttpBearer):
 def require_permission(permission_code: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Guard a Ninja operation using permissions embedded in ``request.auth``."""
 
+    def _check(request: HttpRequest) -> None:
+        principal = getattr(request, "auth", None)
+        if not isinstance(principal, Principal) or permission_code not in principal.permissions:
+            raise PermissionDenied()
+
     def decorator(view: Callable[..., Any]) -> Callable[..., Any]:
+        if inspect.iscoroutinefunction(view):
+
+            @wraps(view)
+            async def async_guarded_view(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
+                _check(request)
+                return await view(request, *args, **kwargs)
+
+            return async_guarded_view
+
         @wraps(view)
         def guarded_view(request: HttpRequest, *args: Any, **kwargs: Any) -> Any:
-            principal = request.auth
-            if not isinstance(principal, Principal) or permission_code not in principal.permissions:
-                raise PermissionDenied()
+            _check(request)
             return view(request, *args, **kwargs)
 
         return guarded_view

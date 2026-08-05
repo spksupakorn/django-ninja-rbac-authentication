@@ -1,8 +1,11 @@
+from collections.abc import Awaitable
+from typing import Any, cast
+
 import pytest
 from django.http import HttpRequest, HttpResponse
 from django.test import RequestFactory
 from ninja import NinjaAPI
-from ninja.testing import TestClient
+from ninja.testing import TestAsyncClient, TestClient
 
 from apps.authz.api.auth import JWTAuth, Principal, require_permission
 from apps.authz.security.jwt import encode_access_token
@@ -19,6 +22,12 @@ def _protected_api() -> NinjaAPI:
     @api.get("/protected", auth=JWTAuth())
     @require_permission("user.read")
     def protected(request: HttpRequest) -> dict[str, bool]:
+        del request
+        return {"ok": True}
+
+    @api.get("/async-protected", auth=JWTAuth())
+    @require_permission("user.read")
+    async def async_protected(request: HttpRequest) -> dict[str, bool]:
         del request
         return {"ok": True}
 
@@ -82,6 +91,33 @@ def test_protected_route_returns_403_without_required_permission() -> None:
     token = encode_access_token(subject=42, roles={"user"}, permissions=[])
     response = TestClient(_protected_api()).get(
         "/protected", headers={"Authorization": f"Bearer {token}"}
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_async_protected_route_allows_granted_permission() -> None:
+    token = encode_access_token(subject=42, roles={"user"}, permissions={"user.read"})
+    response = await cast(
+        Awaitable[Any],
+        TestAsyncClient(_protected_api()).get(
+            "/async-protected", headers={"Authorization": f"Bearer {token}"}
+        ),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+@pytest.mark.asyncio
+async def test_async_protected_route_returns_403_without_required_permission() -> None:
+    token = encode_access_token(subject=42, roles={"user"}, permissions=[])
+    response = await cast(
+        Awaitable[Any],
+        TestAsyncClient(_protected_api()).get(
+            "/async-protected", headers={"Authorization": f"Bearer {token}"}
+        ),
     )
 
     assert response.status_code == 403
