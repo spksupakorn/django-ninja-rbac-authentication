@@ -14,4 +14,5 @@ class UserRepository(BaseRepository[User]):
 
     async def aget_by_email(self, email: str) -> User | None:
         """Look up an email identity without making callers know ORM syntax."""
-        return await self.aget_or_none(email__iexact=email)
+        canonical_email = User.objects.normalize_email(email)
+        return await self.aget_or_none(email=canonical_email)

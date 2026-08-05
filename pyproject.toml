@@ -3,7 +3,7 @@ name = "django-ninja-rbac-authentication"
 version = "0.1.0"
 description = "Async Django Ninja RBAC authentication service"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "argon2-cffi>=23.1,<26",
     "Django>=5.2,<6",

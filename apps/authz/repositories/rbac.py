@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 from apps.authz.models import Permission, Role, RolePermission, UserRole
-from apps.common.repositories import BaseRepository
 
 
-class AuthzRepository(BaseRepository[Role]):
+class AuthzRepository:
     """Provide RBAC queries without exposing ORM traversal to services."""
-
-    def __init__(self) -> None:
-        super().__init__(Role)
 
     async def aget_role_by_name(self, name: str) -> Role | None:
         """Find a role by its stable name."""
-        return await self.aget_or_none(name=name)
+        try:
+            return await Role.objects.aget(name=name)
+        except Role.DoesNotExist:
+            return None
 
     async def aget_user_permission_codes(self, user_id: int) -> set[str]:
         """Return all distinct permission codes inherited by a user through roles."""

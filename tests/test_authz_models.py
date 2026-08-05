@@ -14,7 +14,7 @@ def test_seed_catalog_grants_minimum_permission_to_default_user() -> None:
     assert DEFAULT_ROLE_PERMISSIONS[RoleName.USER] == ("user.read",)
 
 
-@pytest.mark.django_db
+@pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
 async def test_user_permissions_returns_codes_granted_through_roles() -> None:
     user = await User.objects.acreate(email="user@example.com")
