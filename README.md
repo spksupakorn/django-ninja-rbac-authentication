@@ -11,8 +11,8 @@ Django Ninja และ ASGI runtime
 
 ## เริ่มต้นสำหรับ local development
 
-1. สร้างไฟล์ environment จาก template แล้วเปลี่ยน `JWT_SECRET` เป็นค่าสุ่มที่ยาวอย่างน้อย
-   32 ตัวอักษร
+1. สร้างไฟล์ environment จาก template แล้วเปลี่ยน `DJANGO_SECRET_KEY` และ `JWT_SECRET`
+   เป็นค่าสุ่มคนละค่า โดยแต่ละค่าต้องยาวอย่างน้อย 32 ตัวอักษร
 
    ```sh
    cp .env.example .env
@@ -117,10 +117,13 @@ uv run uvicorn config.asgi:application --reload --host 127.0.0.1 --port 8000
 | Variable | ความหมาย | ค่า default |
 | --- | --- | --- |
 | `DATABASE_URL` | PostgreSQL connection URL | ต้องกำหนด |
-| `JWT_SECRET` | JWT signing secret, อย่างน้อย 32 ตัวอักษร | ต้องกำหนด |
+| `DJANGO_SECRET_KEY` | Django signing secret, แยกจาก JWT และอย่างน้อย 32 ตัวอักษร | ต้องกำหนด |
+| `JWT_SECRET` | JWT signing secret, แยกจาก Django secret และอย่างน้อย 32 ตัวอักษร | ต้องกำหนด |
 | `ACCESS_TTL` | อายุ access token | `15m` |
 | `REFRESH_TTL` | อายุ refresh token | `7d` |
+| `DEFAULT_USER_ROLE` | role ที่ assign ให้ user ใหม่ | `user` |
 | `THROTTLE_LOGIN` | ขีดจำกัด login per IP | `5/minute` |
+| `ALLOWED_HOSTS` | โดเมน/IP ที่อนุญาตบน production (คั่นด้วย comma) | ต้องกำหนดบน production |
 | `DJANGO_SETTINGS_MODULE` | settings module ที่ใช้ boot | `config.settings.dev` |
 
 `config.settings.prod` เปิด secure-cookie, HSTS และ HTTPS redirect สำหรับ production;
