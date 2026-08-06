@@ -21,8 +21,13 @@
 Permission เป็น **catalog ที่นิยามในโค้ด** (enum/constants) และ seed ลง DB ผ่าน migration/data-migration
 เพื่อให้ permission string มี single source of truth และ refactor ได้ปลอดภัย
 
+**การเปลี่ยน permission catalog** — migration จะ freeze ค่า catalog ณ เวลาที่สร้างเสมอ;
+เมื่อเพิ่ม/ลบ permission ต้องเพิ่ม data migration ใหม่เพื่อ sync catalog กับ database ห้ามแก้
+migration เดิมหรือคาดหวังให้ migration ที่ apply แล้วรันซ้ำ
+
 **Default role ตอน register**: user ใหม่ถูก assign role `user` **อัตโนมัติ** (role นี้ seed ไว้ตั้งแต่ต้น)
-- `user` = สิทธิ์ขั้นต่ำของ authenticated user (จัดการ resource ของตัวเอง — ขยาย perm ทีหลังได้)
+- `user` = สิทธิ์ขั้นต่ำของ authenticated user; ปัจจุบันไม่มี collection-level admin
+  capability จนกว่าจะมี permission ระดับ resource ของตัวเองโดยเฉพาะ
 - role `admin` (ได้ทุก perm) assign ให้เฉพาะโดย admin ผ่าน admin CRUD ไม่ได้อัตโนมัติ
 - ชื่อ default role เก็บเป็น setting (`DEFAULT_USER_ROLE="user"`) ไม่ hardcode ในหลายที่
 

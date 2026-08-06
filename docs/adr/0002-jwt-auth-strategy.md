@@ -23,7 +23,7 @@ JWT เป็น stateless — จุดที่คนพลาดคือ "�
 - ยอมรับ trade-off นี้ (ดู ADR-0001 admin CRUD)
 
 **Rotation + reuse-detection**
-- ทุกครั้งที่เรียก `/auth/refresh`: revoke refresh เดิม แล้วออก access+refresh คู่ใหม่
+- ทุกครั้งที่เรียก `/v1/auth/refresh`: revoke refresh เดิม แล้วออก access+refresh คู่ใหม่
 - refresh token มี **family id** (chain). ถ้า refresh ที่ถูก rotate/revoke ไปแล้วถูกใช้ซ้ำ →
   ถือว่า **token ถูกขโมย** → revoke **ทั้ง family** และบังคับ login ใหม่
 - **logout** = ลบ/revoke refresh token ปัจจุบันออกจาก DB

@@ -24,6 +24,8 @@ class User(AbstractBaseUser, PermissionsMixin):
 ```
 
 - ตั้ง `AUTH_USER_MODEL = "accounts.User"` ใน settings ก่อน migrate แรก
+- email identity เป็น **case-insensitive**: normalize เป็น lowercase ทั้งค่า และ database
+  บังคับ unique ด้วย `Lower("email")`
 - ใช้ `AbstractBaseUser` + `PermissionsMixin` (ได้ password/last_login + hook เข้ากับ Django auth)
 - RBAC role/permission ของเราเป็น **ตารางแยกของเราเอง** (ADR-0001) ไม่ใช้ Django Group/Permission
   built-in เพื่อคุม schema/naming เอง (Django perms ยังใช้กับ admin ได้ตามปกติ)

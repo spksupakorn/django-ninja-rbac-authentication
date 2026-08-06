@@ -25,7 +25,7 @@
 4. `PASSWORD_HASHERS` = Argon2id first (ADR-0006)
 5. `docker-compose.yml`: `web` (ASGI, uvicorn, build จาก uv) + `db` (Postgres 16, healthcheck),
    `web` depends_on db healthy; `.env.example`
-- **DoD**: `docker compose up` ขึ้น, `GET /api/health` = 200, `ruff`/`mypy` ผ่าน
+- **DoD**: `docker compose up` ขึ้น, `GET /api/v1/health` = 200, `ruff`/`mypy` ผ่าน
 
 ## M1 — Custom User model  → ADR-0004  *(ต้องก่อน migrate แรก)*
 6. `accounts.User(AbstractBaseUser, PermissionsMixin)` — email unique, `USERNAME_FIELD="email"`, ไม่มี username
@@ -74,10 +74,10 @@
 - **DoD**: integration test — no token=401, token ไม่มี perm=403, throttle เกิน=429
 
 ## M7 — Endpoints (routers + schemas)  → ADR-0003
-22. `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` ·
-    `POST /auth/logout` · `GET /auth/me`
-23. Admin (require_permission): `users` CRUD, `POST /admin/users/{id}/roles`,
-    `GET /admin/roles`, `GET /admin/permissions` + pagination
+22. `POST /v1/auth/register` · `POST /v1/auth/login` · `POST /v1/auth/refresh` ·
+    `POST /v1/auth/logout` · `GET /v1/auth/me`
+23. Admin (require_permission): `users` CRUD, `POST /v1/admin/users/{id}/roles`,
+    `GET /v1/admin/roles`, `GET /v1/admin/permissions` + pagination
 24. Pydantic schemas in/out; login ผิดคืน 401 กลางๆ (กัน enumeration)
 - **DoD**: OpenAPI docs (`/api/docs`) ครบ, e2e flow register→login→เรียก admin ด้วยสิทธิ์ถูก/ผิด ผ่าน
 

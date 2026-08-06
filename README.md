@@ -22,14 +22,21 @@ Backend สำหรับ JWT authentication และ role-based access contro
    docker compose up --build -d
    ```
 
-3. รัน migration (รวม RBAC catalog/role seed) แล้วตรวจ health
+3. รัน migration แบบ manual (รวม RBAC catalog/role seed)
 
    ```sh
    docker compose exec web python manage.py migrate
+   ```
+
+4. ตรวจ health
+
+   ```sh
    curl http://localhost:8000/api/v1/health
    ```
 
    ผลลัพธ์คือ `{"status":"ok"}` และ OpenAPI อยู่ที่ [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
+
+   > การ migrate เป็นขั้นตอน manual ทั้ง local Compose และ production เพื่อให้ควบคุมจังหวะเปลี่ยน schema ได้
 
 คำสั่งที่ใช้บ่อย:
 
@@ -81,6 +88,7 @@ uv run pytest --cov --cov-report=term-missing
 
 test suite ใช้ PostgreSQL จริง และ CI บังคับ lint, type check และ service coverage อย่างน้อย 90%.
 Factory สำหรับ test อยู่ที่ `tests/factories.py`; ใช้สร้าง model fixture ที่ reusable ใน test แบบ synchronous
+ทั้ง Gunicorn และ Uvicorn ตรวจ connection ที่ ASGI lifespan; server จะไม่เริ่มเมื่อ PostgreSQL ไม่พร้อม
 
 ## Environment configuration
 

@@ -3,10 +3,10 @@
 from django.http import HttpRequest
 from ninja import Router
 
+from apps.accounts.services.admin import AdminService
 from apps.authz.api.auth import JWTAuth, require_permission
 from apps.authz.api.schemas import PermissionOut, PermissionsPageOut, RoleOut, RolesPageOut
 from apps.authz.models import Permission, Role
-from apps.authz.repositories.rbac import AuthzRepository
 
 router = Router(tags=["admin-rbac"])
 
@@ -34,11 +34,10 @@ async def list_roles(
     """List roles with offset pagination."""
     del request
     offset, limit = _pagination(offset, limit)
-    repository = AuthzRepository()
-    roles = await repository.alist_roles(offset=offset, limit=limit)
+    roles, total = await AdminService().list_roles(offset=offset, limit=limit)
     return RolesPageOut(
         items=[_role_out(role) for role in roles],
-        total=await repository.acount_roles(),
+        total=total,
         offset=offset,
         limit=limit,
     )
@@ -54,11 +53,10 @@ async def list_permissions(
     """List permission catalog rows with offset pagination."""
     del request
     offset, limit = _pagination(offset, limit)
-    repository = AuthzRepository()
-    permissions = await repository.alist_permissions(offset=offset, limit=limit)
+    permissions, total = await AdminService().list_permissions(offset=offset, limit=limit)
     return PermissionsPageOut(
         items=[_permission_out(permission) for permission in permissions],
-        total=await repository.acount_permissions(),
+        total=total,
         offset=offset,
         limit=limit,
     )

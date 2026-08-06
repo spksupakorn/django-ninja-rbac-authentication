@@ -50,6 +50,7 @@ def test_auth_api_register_login_refresh_logout_and_me() -> None:
         HTTP_AUTHORIZATION=f"Bearer {token_pair['access_token']}",
     )
     assert me.status_code == 200
+    assert me.json()["email"] == "user@example.com"
     assert me.json()["roles"] == ["user"]
     assert me.json()["permissions"] == []
 
@@ -144,3 +145,22 @@ def test_auth_api_login_failure_has_one_generic_response() -> None:
         "detail": "Invalid email or password.",
         "code": "invalid_credentials",
     }
+
+
+@pytest.mark.django_db(transaction=True)
+def test_register_endpoint_is_rate_limited() -> None:
+    cache.clear()
+    Role.objects.get_or_create(name="user")
+    client = Client()
+
+    statuses = [
+        _json_post(
+            client,
+            "/api/v1/auth/register",
+            {"email": f"user{i}@example.com", "password": "password123"},
+        ).status_code
+        for i in range(6)
+    ]
+
+    assert statuses[:5] == [201, 201, 201, 201, 201]
+    assert statuses[5] == 429

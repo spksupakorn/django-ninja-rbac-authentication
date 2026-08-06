@@ -44,6 +44,7 @@ class TokenPairOut(Schema):
 
 class MeOut(Schema):
     id: int
+    email: EmailStr
     roles: list[str]
     permissions: list[str]
 

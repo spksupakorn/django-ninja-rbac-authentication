@@ -6,6 +6,7 @@ from django.db import IntegrityError
 
 from apps.accounts.models import User
 from apps.accounts.repositories.users import UserRepository
+from apps.authz.models import Permission, Role
 from apps.authz.repositories.rbac import AuthzRepository
 from apps.authz.security.passwords import hash_password
 from apps.authz.services.auth import AuthService
@@ -40,6 +41,22 @@ class AdminService:
     async def list_users(self, *, offset: int, limit: int) -> tuple[list[User], int]:
         """Return a page of users and the total count."""
         return await self.users.alist(offset=offset, limit=limit), await self.users.acount()
+
+    async def list_roles(self, *, offset: int, limit: int) -> tuple[list[Role], int]:
+        """Return a page of roles and the total count."""
+        return (
+            await self.authz.alist_roles(offset=offset, limit=limit),
+            await self.authz.acount_roles(),
+        )
+
+    async def list_permissions(
+        self, *, offset: int, limit: int
+    ) -> tuple[list[Permission], int]:
+        """Return a page of permission catalog rows and the total count."""
+        return (
+            await self.authz.alist_permissions(offset=offset, limit=limit),
+            await self.authz.acount_permissions(),
+        )
 
     async def update_user(
         self,

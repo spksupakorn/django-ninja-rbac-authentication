@@ -104,6 +104,13 @@ class AuthService:
         if refresh_token is not None:
             await self.refresh_tokens.arevoke(refresh_token.id, timezone.now())
 
+    async def aget_active_email(self, user_id: int) -> str:
+        """Return the identity's email, rejecting tokens for deleted users."""
+        user = await self.users.aget_by_id(user_id)
+        if user is None:
+            raise InvalidToken()
+        return user.email
+
     async def _issue_token_pair(
         self, *, user_id: int, family_id: UUID, parent_id: int | None
     ) -> TokenPair:

@@ -15,7 +15,7 @@ from apps.authz.api.schemas import (
     UserOut,
 )
 from apps.authz.services.auth import AuthService, TokenPair
-from apps.common.throttling import LoginRateThrottle
+from apps.common.throttling import LoginRateThrottle, RegisterRateThrottle
 
 router = Router(tags=["auth"])
 
@@ -31,7 +31,7 @@ def _user_out(user: User) -> UserOut:
     return UserOut.model_validate(user)
 
 
-@router.post("/register", response={201: UserOut})
+@router.post("/register", response={201: UserOut}, throttle=RegisterRateThrottle())
 async def register(request: HttpRequest, payload: RegisterIn) -> Status[UserOut]:
     """Register an account with the default RBAC role."""
     del request
@@ -69,8 +69,10 @@ async def me(request: HttpRequest) -> MeOut:
     principal = request.auth
     if not isinstance(principal, Principal):
         raise RuntimeError("JWTAuth did not supply a principal")
+    email = await AuthService().aget_active_email(principal.user_id)
     return MeOut(
         id=principal.user_id,
+        email=email,
         roles=sorted(principal.roles),
         permissions=sorted(principal.permissions),
     )
