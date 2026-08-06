@@ -96,7 +96,7 @@ class RefreshTokenRepository:
                 RefreshToken.objects.filter(
                     family_id=refresh_token.family_id, revoked_at__isnull=True
                 ).update(revoked_at=rotated_at)
-                return RefreshRotationResult(outcome="reused")
+                return RefreshRotationResult(outcome="reused", refresh_token=refresh_token)
             if refresh_token.expires_at <= rotated_at:
                 return RefreshRotationResult(outcome="expired")
 

@@ -16,6 +16,7 @@ class PermissionCode(StrEnum):
     ROLE_ASSIGN = "role.assign"
     ROLE_READ = "role.read"
     PERMISSION_READ = "permission.read"
+    AUDIT_READ = "audit.read"
 
 
 class RoleName(StrEnum):

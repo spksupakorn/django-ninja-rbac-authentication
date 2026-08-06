@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from django.db import IntegrityError
 
 from apps.accounts.models import User
 from apps.accounts.repositories.users import UserRepository
+from apps.audit.actions import AuditAction
+from apps.audit.context import AuditContext
+from apps.audit.models import AuditLog
+from apps.audit.repositories import AuditRepository
+from apps.audit.services import AuditService
 from apps.authz.models import Permission, Role
 from apps.authz.repositories.rbac import AuthzRepository
 from apps.authz.security.passwords import hash_password
@@ -22,14 +29,30 @@ class AdminService:
         users: UserRepository | None = None,
         authz: AuthzRepository | None = None,
         auth: AuthService | None = None,
+        audit: AuditService | None = None,
+        audit_records: AuditRepository | None = None,
     ) -> None:
         self.users = users or UserRepository()
         self.authz = authz or AuthzRepository()
         self.auth = auth or AuthService(users=self.users, authz=self.authz)
+        self.audit = audit or AuditService()
+        self.audit_records = audit_records or AuditRepository()
 
-    async def create_user(self, *, email: str, password: str) -> User:
+    async def create_user(self, *, email: str, password: str, context: AuditContext) -> User:
         """Create a user with the default role."""
-        return await self.auth.register(email=email, password=password)
+        user = await self.auth.register(
+            email=email,
+            password=password,
+            context=context,
+            record_registration=False,
+        )
+        await self.audit.record(
+            AuditAction.USER_CREATE,
+            context=context,
+            target_type="user",
+            target_id=user.id,
+        )
+        return user
 
     async def get_user(self, user_id: int) -> User:
         """Return a user or raise a domain-level not-found error."""
@@ -58,6 +81,28 @@ class AdminService:
             await self.authz.acount_permissions(),
         )
 
+    async def list_audit_logs(
+        self,
+        *,
+        offset: int,
+        limit: int,
+        actor_id: int | None = None,
+        action: str | None = None,
+        outcome: str | None = None,
+        from_at: datetime | None = None,
+        to_at: datetime | None = None,
+    ) -> tuple[list[AuditLog], int]:
+        """Return a filtered page of audit records for investigation."""
+        return await self.audit_records.alist(
+            offset=offset,
+            limit=limit,
+            actor_id=actor_id,
+            action=action,
+            outcome=outcome,
+            from_at=from_at,
+            to_at=to_at,
+        )
+
     async def update_user(
         self,
         *,
@@ -65,6 +110,7 @@ class AdminService:
         email: str | None = None,
         password: str | None = None,
         is_active: bool | None = None,
+        context: AuditContext,
     ) -> User:
         """Update permitted user fields."""
         fields: dict[str, object] = {}
@@ -82,17 +128,37 @@ class AdminService:
             raise EmailAlreadyExists() from exc
         if user is None:
             raise ResourceNotFound("User not found.")
+        await self.audit.record(
+            AuditAction.USER_UPDATE,
+            context=context,
+            target_type="user",
+            target_id=user.id,
+            metadata={"changed_fields": sorted(fields)},
+        )
         return user
 
-    async def delete_user(self, user_id: int) -> None:
+    async def delete_user(self, user_id: int, *, context: AuditContext) -> None:
         """Delete a user or signal that it did not exist."""
         if not await self.users.adelete(user_id):
             raise ResourceNotFound("User not found.")
+        await self.audit.record(
+            AuditAction.USER_DELETE,
+            context=context,
+            target_type="user",
+            target_id=user_id,
+        )
 
-    async def assign_role(self, *, user_id: int, role_id: int) -> None:
+    async def assign_role(self, *, user_id: int, role_id: int, context: AuditContext) -> None:
         """Assign a role to an existing user."""
         await self.get_user(user_id)
         role = await self.authz.aget_role_by_id(role_id)
         if role is None:
             raise ResourceNotFound("Role not found.")
         await self.authz.aassign_role(user_id=user_id, role_id=role.id)
+        await self.audit.record(
+            AuditAction.ROLE_ASSIGN,
+            context=context,
+            target_type="user",
+            target_id=user_id,
+            metadata={"role_id": role.id, "role_name": role.name},
+        )

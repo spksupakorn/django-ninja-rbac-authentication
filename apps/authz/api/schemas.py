@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from ninja import Field, ModelSchema, Schema
 from pydantic import EmailStr
 
@@ -83,6 +85,27 @@ class RolesPageOut(Schema):
 
 class PermissionsPageOut(Schema):
     items: list[PermissionOut]
+    total: int
+    offset: int
+    limit: int
+
+
+class AuditLogOut(Schema):
+    id: int
+    created_at: datetime
+    action: str
+    actor_id: int | None
+    actor_email: EmailStr | None
+    target_type: str | None
+    target_id: str | None
+    outcome: str
+    ip: str | None
+    user_agent: str | None
+    metadata: dict[str, object]
+
+
+class AuditLogsPageOut(Schema):
+    items: list[AuditLogOut]
     total: int
     offset: int
     limit: int

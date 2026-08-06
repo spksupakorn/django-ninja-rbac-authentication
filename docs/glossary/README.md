@@ -31,6 +31,14 @@
 - <a id="custom-user-model"></a>**Custom User model** — `accounts.User` ที่เรานิยามเอง ตั้ง `AUTH_USER_MODEL` ก่อน migrate แรก → ADR-0004
 - <a id="username-field"></a>**USERNAME_FIELD** — field ที่ Django ใช้เป็น identity ตอน login; ที่นี่ = `email` → ADR-0004
 
+## Audit
+
+- <a id="audit-log"></a>**Audit log** — บันทึก append-only ของ security events + admin mutations (ไม่เก็บ read ปกติ) → ADR-0007
+- <a id="audit-action"></a>**AuditAction** — catalog (enum) ของ action ที่ audit เช่น `login.failure`, `role.assign` — single source of truth → ADR-0007
+- <a id="audit-context"></a>**AuditContext** — dataclass ห่อ HTTP context (actor_id, actor_email, ip, user_agent, request_id) ที่ router สร้างแล้วส่งเข้า service ให้ service ยัง HTTP-agnostic → ADR-0007
+- <a id="best-effort-audit"></a>**Best-effort audit** — การเขียน audit ที่ถ้าล้มเหลวจะ log warning แต่ไม่ทำให้ action (login/assign) rollback → ADR-0007
+- <a id="audit-read"></a>**audit.read** — permission สำหรับอ่าน audit log ผ่าน `GET /api/v1/admin/audit-logs`; seed ให้ role `admin` ด้วย data migration ใหม่ → ADR-0001/0007
+
 ## Runtime & Security
 
 - <a id="asgi"></a>**ASGI** — interface async ของ Python web (แทน WSGI) รันด้วย uvicorn → ADR-0005

@@ -5,7 +5,8 @@ from ninja import Router, Status
 
 from apps.accounts.models import User
 from apps.accounts.services.admin import AdminService
-from apps.authz.api.auth import JWTAuth, require_permission
+from apps.audit.context import AuditContext
+from apps.authz.api.auth import JWTAuth, Principal, require_permission
 from apps.authz.api.schemas import AssignRoleIn, RegisterIn, UserOut, UsersPageOut, UserUpdateIn
 from apps.common.api.schemas import BuildResponse, success_response
 
@@ -19,6 +20,13 @@ def _user_out(user: User) -> UserOut:
 def _pagination(offset: int, limit: int) -> tuple[int, int]:
     """Keep page sizes bounded even when handlers are called directly."""
     return max(offset, 0), min(max(limit, 1), 100)
+
+
+def _audit_context(request: HttpRequest) -> AuditContext:
+    principal = request.auth
+    if not isinstance(principal, Principal):
+        raise RuntimeError("JWTAuth did not supply a principal")
+    return AuditContext.from_request(request, principal)
 
 
 @router.get("", auth=JWTAuth(), response=BuildResponse[UsersPageOut])
@@ -46,8 +54,11 @@ async def create_user(
     request: HttpRequest, payload: RegisterIn
 ) -> Status[BuildResponse[UserOut]]:
     """Create a user with the default role."""
-    del request
-    user = await AdminService().create_user(email=str(payload.email), password=payload.password)
+    user = await AdminService().create_user(
+        email=str(payload.email),
+        password=payload.password,
+        context=_audit_context(request),
+    )
     return Status(201, success_response(_user_out(user), code=201, message="User created."))
 
 
@@ -67,12 +78,12 @@ async def update_user(
     request: HttpRequest, user_id: int, payload: UserUpdateIn
 ) -> BuildResponse[UserOut]:
     """Update selected safe user fields."""
-    del request
     user = await AdminService().update_user(
         user_id=user_id,
         email=str(payload.email) if payload.email is not None else None,
         password=payload.password,
         is_active=payload.is_active,
+        context=_audit_context(request),
     )
     return success_response(_user_out(user), message="User updated.")
 
@@ -81,8 +92,7 @@ async def update_user(
 @require_permission("user.delete")
 async def delete_user(request: HttpRequest, user_id: int) -> BuildResponse[None]:
     """Delete one user."""
-    del request
-    await AdminService().delete_user(user_id)
+    await AdminService().delete_user(user_id, context=_audit_context(request))
     return success_response(None, message="User deleted.")
 
 
@@ -92,6 +102,7 @@ async def assign_role(
     request: HttpRequest, user_id: int, payload: AssignRoleIn
 ) -> BuildResponse[None]:
     """Assign a role idempotently."""
-    del request
-    await AdminService().assign_role(user_id=user_id, role_id=payload.role_id)
+    await AdminService().assign_role(
+        user_id=user_id, role_id=payload.role_id, context=_audit_context(request)
+    )
     return success_response(None, message="Role assigned.")

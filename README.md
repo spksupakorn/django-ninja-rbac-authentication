@@ -74,6 +74,7 @@ docker compose down
 | CRUD | `/api/v1/admin/users` | จัดการ user (ต้องมี permission) |
 | POST | `/api/v1/admin/users/{id}/roles` | assign role (ต้องมี `role.assign`) |
 | GET | `/api/v1/admin/roles`, `/api/v1/admin/permissions` | ดู RBAC catalog (ต้องมี permission) |
+| GET | `/api/v1/admin/audit-logs` | ค้นหา audit log (ต้องมี `audit.read`) |
 
 ส่ง access token ด้วย `Authorization: Bearer <access-token>` ทุก endpoint ที่ป้องกันไว้
 การแก้ role/permission จะมีผลกับ access token ที่ออกใหม่; token เดิมอาจคง claims ได้นานสูงสุดตาม `ACCESS_TTL`
@@ -96,6 +97,16 @@ docker compose down
 
 role `admin` ที่ seed จาก migration ได้ permission catalog ทั้งหมด ส่วน role เริ่มต้น `user`
 ไม่มี collection-level admin permission โดยตั้งใจ จึงเข้าถึง `/api/v1/admin/*` ไม่ได้จนกว่าจะได้รับสิทธิ์เพิ่ม
+
+## Audit log
+
+ระบบบันทึกเหตุการณ์ด้านความปลอดภัย (`login`, token refresh/reuse, logout, register) และการแก้ไขโดย
+admin (`user.*`, `role.assign`) แบบ append-only. หากการบันทึก audit ล้มเหลว action หลักจะทำงานต่อได้
+และระบบจะเขียน warning เพื่อให้ตรวจสอบภายหลังได้
+
+ผู้มี `audit.read` เรียก `GET /api/v1/admin/audit-logs` ได้ โดยใช้ `offset`, `limit` และ filter
+`actor_id`, `action`, `outcome`, `from`, `to`. Metadata จะตัด password, token และ secrets ออกก่อนบันทึก
+และไม่มี endpoint สำหรับแก้ไขหรือลบ audit log.
 
 ## รันบนเครื่องและทดสอบ
 
@@ -131,6 +142,7 @@ Factory สำหรับ test อยู่ที่ `tests/factories.py`; ใ�
 | `DEFAULT_USER_ROLE` | role ที่ assign ระหว่าง register/create user | `user` |
 | `THROTTLE_LOGIN` | rate limit ต่อ IP ของ login/refresh | `5/minute` |
 | `ALLOWED_HOSTS` | domain/IP production คั่นด้วย comma | ต้องกำหนดใน production |
+| `TRUSTED_PROXY_CIDRS` | CIDR ของ reverse proxy ที่เชื่อถือได้สำหรับ `X-Forwarded-For` | ว่าง |
 | `DJANGO_SETTINGS_MODULE` | settings module ที่ใช้ boot | `config.settings.dev` |
 
 `config.settings.prod` บังคับ `DEBUG=False`, `ALLOWED_HOSTS`, HTTPS redirect, secure cookies,
