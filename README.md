@@ -28,7 +28,20 @@ Backend สำหรับ JWT authentication และ role-based access contro
    docker compose exec web python manage.py migrate
    ```
 
-4. ตรวจ health
+4. Bootstrap administrator สำหรับ Django Admin และ API RBAC
+
+   ```sh
+   read -s BOOTSTRAP_ADMIN_PASSWORD
+   export BOOTSTRAP_ADMIN_PASSWORD
+   docker compose exec -e BOOTSTRAP_ADMIN_PASSWORD web \
+     python manage.py bootstrap_admin --email admin@example.com
+   unset BOOTSTRAP_ADMIN_PASSWORD
+   ```
+
+   คำสั่งนี้สร้างหรืออัปเดต account ให้เป็น Django superuser และ assign `authz` role `admin`.
+   รันซ้ำได้โดยไม่ reset password ของ account เดิม
+
+5. ตรวจ health
 
    ```sh
    curl http://localhost:8000/api/v1/health
@@ -42,7 +55,7 @@ Backend สำหรับ JWT authentication และ role-based access contro
 
 ```sh
 docker compose logs -f web
-docker compose exec web python manage.py createsuperuser
+docker compose exec web python manage.py bootstrap_admin --email admin@example.com
 docker compose exec web python manage.py check
 docker compose down
 ```
