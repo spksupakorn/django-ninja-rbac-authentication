@@ -78,6 +78,22 @@ docker compose down
 ส่ง access token ด้วย `Authorization: Bearer <access-token>` ทุก endpoint ที่ป้องกันไว้
 การแก้ role/permission จะมีผลกับ access token ที่ออกใหม่; token เดิมอาจคง claims ได้นานสูงสุดตาม `ACCESS_TTL`
 
+## API response contract
+
+ทุก API response ใช้ envelope เดียวกัน โดย `code` สอดคล้องกับ HTTP status:
+
+```json
+{
+  "success": true,
+  "code": 200,
+  "message": "Profile fetched.",
+  "data": {"id": 1, "email": "user@example.com"}
+}
+```
+
+กรณีผิดพลาด `success` จะเป็น `false`, `data` เป็น `null` และ `message` เป็นข้อความกลาง
+ที่ปลอดภัยต่อการแสดงผล ส่วน frontend ใช้ HTTP status/`code` ในการจัดการ flow.
+
 role `admin` ที่ seed จาก migration ได้ permission catalog ทั้งหมด ส่วน role เริ่มต้น `user`
 ไม่มี collection-level admin permission โดยตั้งใจ จึงเข้าถึง `/api/v1/admin/*` ไม่ได้จนกว่าจะได้รับสิทธิ์เพิ่ม
 

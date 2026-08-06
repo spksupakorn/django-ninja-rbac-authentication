@@ -15,6 +15,7 @@ from apps.authz.api.schemas import (
     UserOut,
 )
 from apps.authz.services.auth import AuthService, TokenPair
+from apps.common.api.schemas import BuildResponse, success_response
 from apps.common.throttling import LoginRateThrottle, RegisterRateThrottle
 
 router = Router(tags=["auth"])
@@ -31,48 +32,55 @@ def _user_out(user: User) -> UserOut:
     return UserOut.model_validate(user)
 
 
-@router.post("/register", response={201: UserOut}, throttle=RegisterRateThrottle())
-async def register(request: HttpRequest, payload: RegisterIn) -> Status[UserOut]:
+@router.post(
+    "/register", response={201: BuildResponse[UserOut]}, throttle=RegisterRateThrottle()
+)
+async def register(
+    request: HttpRequest, payload: RegisterIn
+) -> Status[BuildResponse[UserOut]]:
     """Register an account with the default RBAC role."""
     del request
     user = await AuthService().register(email=str(payload.email), password=payload.password)
-    return Status(201, _user_out(user))
+    return Status(201, success_response(_user_out(user), code=201, message="User registered."))
 
 
-@router.post("/login", response=TokenPairOut, throttle=LoginRateThrottle())
-async def login(request: HttpRequest, payload: LoginIn) -> TokenPairOut:
+@router.post("/login", response=BuildResponse[TokenPairOut], throttle=LoginRateThrottle())
+async def login(request: HttpRequest, payload: LoginIn) -> BuildResponse[TokenPairOut]:
     """Authenticate an account and issue an access/refresh pair."""
     del request
     token_pair = await AuthService().login(email=str(payload.email), password=payload.password)
-    return _token_pair_response(token_pair)
+    return success_response(_token_pair_response(token_pair), message="Authenticated.")
 
 
-@router.post("/refresh", response=TokenPairOut, throttle=LoginRateThrottle())
-async def refresh(request: HttpRequest, payload: RefreshIn) -> TokenPairOut:
+@router.post("/refresh", response=BuildResponse[TokenPairOut], throttle=LoginRateThrottle())
+async def refresh(request: HttpRequest, payload: RefreshIn) -> BuildResponse[TokenPairOut]:
     """Rotate a refresh token and issue a new access/refresh pair."""
     del request
     token_pair = await AuthService().refresh(raw_refresh_token=payload.refresh_token)
-    return _token_pair_response(token_pair)
+    return success_response(_token_pair_response(token_pair), message="Token refreshed.")
 
 
-@router.post("/logout", response={204: None})
-async def logout(request: HttpRequest, payload: LogoutIn) -> Status[None]:
+@router.post("/logout", response=BuildResponse[None])
+async def logout(request: HttpRequest, payload: LogoutIn) -> BuildResponse[None]:
     """Revoke the supplied refresh token."""
     del request
     await AuthService().logout(raw_refresh_token=payload.refresh_token)
-    return Status(204, None)
+    return success_response(None, message="Logged out.")
 
 
-@router.get("/me", auth=JWTAuth(), response=MeOut)
-async def me(request: HttpRequest) -> MeOut:
+@router.get("/me", auth=JWTAuth(), response=BuildResponse[MeOut])
+async def me(request: HttpRequest) -> BuildResponse[MeOut]:
     """Return the identity and RBAC claims carried by the access token."""
     principal = request.auth
     if not isinstance(principal, Principal):
         raise RuntimeError("JWTAuth did not supply a principal")
     email = await AuthService().aget_active_email(principal.user_id)
-    return MeOut(
-        id=principal.user_id,
-        email=email,
-        roles=sorted(principal.roles),
-        permissions=sorted(principal.permissions),
+    return success_response(
+        MeOut(
+            id=principal.user_id,
+            email=email,
+            roles=sorted(principal.roles),
+            permissions=sorted(principal.permissions),
+        ),
+        message="Profile fetched.",
     )

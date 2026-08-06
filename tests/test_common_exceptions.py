@@ -16,8 +16,10 @@ def test_domain_error_handler_returns_safe_error_response() -> None:
 
     assert response.status_code == 409
     assert json.loads(response.content) == {
-        "detail": "An account with this email already exists.",
-        "code": "email_already_exists",
+        "success": False,
+        "code": 409,
+        "message": "Request could not be completed.",
+        "data": None,
     }
 
 
