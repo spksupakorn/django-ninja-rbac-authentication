@@ -27,6 +27,14 @@ class TokenReused(DomainError):
     default_detail = "This refresh token has already been used."
 
 
+class RefreshTokenBindingMismatch(DomainError):
+    """A refresh token was presented outside its bound device context."""
+
+    status_code = 401
+    code = "refresh_token_binding_mismatch"
+    default_detail = "The token is invalid or expired."
+
+
 class InvalidToken(DomainError):
     status_code = 401
     code = "invalid_token"

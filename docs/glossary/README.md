@@ -16,6 +16,8 @@
 - <a id="token-rotation"></a>**Token rotation** — ทุกครั้งที่ refresh จะ revoke ตัวเก่าและออกคู่ใหม่ → ADR-0002
 - <a id="token-family"></a>**Token family** — chain ของ refresh token ที่สืบจาก login ครั้งเดียวกัน ใช้ทำ reuse-detection → ADR-0002
 - <a id="reuse-detection"></a>**Reuse-detection** — ถ้า refresh ที่ถูก rotate/revoke ไปแล้วถูกใช้ซ้ำ = สัญญาณถูกขโมย → revoke ทั้ง family → ADR-0002
+- <a id="device-binding"></a>**Device binding** — การผูก refresh-token family กับ hash ของ normalized User-Agent; mismatch จะ revoke ทั้ง family เพื่อจำกัด token theft → ADR-0009
+- <a id="rotation-family"></a>**Rotation family** — ชื่ออีกแบบของ token family: สาย refresh token ที่เริ่มจาก login เดียวและสืบ binding เดียวกัน → ADR-0002/0009
 - <a id="jti"></a>**jti** — JWT ID, ตัวระบุ token ไม่ซ้ำ ใช้ทำ revoke/tracking → ADR-0002
 - <a id="claim"></a>**Claim** — ข้อมูลใน payload ของ JWT (เช่น `sub`, `exp`, `roles`, `perms`)
 

@@ -104,4 +104,4 @@ M0 → M1 → M2 → M3 → M4 → M5 → M6 → M7 → M8
 
 ## นอก scope Phase 1 (Phase 2 backlog)
 email verification · password reset · RS256 · object-level perms · Redis throttle/blocklist ·
-async ORM รอบด้าน · audit log · refresh token binding (device/ip)
+async ORM รอบด้าน · audit log · refresh token binding (device/ip → [plan](REFRESH_TOKEN_BINDING_PLAN.md) · [ADR-0009](adr/0009-refresh-token-binding.md))

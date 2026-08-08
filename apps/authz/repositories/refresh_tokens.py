@@ -8,6 +8,7 @@ from typing import Literal
 from uuid import UUID
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
 from django.db import transaction
 
 from apps.authz.models import RefreshToken
@@ -17,8 +18,9 @@ from apps.authz.models import RefreshToken
 class RefreshRotationResult:
     """The outcome of an atomic refresh-token rotation attempt."""
 
-    outcome: Literal["rotated", "missing", "expired", "reused"]
+    outcome: Literal["rotated", "missing", "expired", "reused", "binding_mismatch"]
     refresh_token: RefreshToken | None = None
+    previous_issued_ip: str | None = None
 
 
 class RefreshTokenRepository:
@@ -39,6 +41,8 @@ class RefreshTokenRepository:
         family_id: UUID,
         parent_id: int | None,
         expires_at: datetime,
+        device_hash: str | None = None,
+        issued_ip: str | None = None,
     ) -> RefreshToken:
         """Store a newly issued refresh token."""
         return await RefreshToken.objects.acreate(
@@ -47,6 +51,8 @@ class RefreshTokenRepository:
             family_id=family_id,
             parent_id=parent_id,
             expires_at=expires_at,
+            device_hash=device_hash,
+            issued_ip=issued_ip,
         )
 
     async def arevoke(self, token_id: int, revoked_at: datetime) -> None:
@@ -74,6 +80,8 @@ class RefreshTokenRepository:
         replacement_hash: str,
         replacement_expires_at: datetime,
         rotated_at: datetime,
+        presented_device_hash: str | None = None,
+        presented_ip: str | None = None,
     ) -> RefreshRotationResult:
         """Atomically consume a refresh token and create its replacement."""
         return await sync_to_async(self._rotate, thread_sensitive=True)(
@@ -81,6 +89,8 @@ class RefreshTokenRepository:
             replacement_hash=replacement_hash,
             replacement_expires_at=replacement_expires_at,
             rotated_at=rotated_at,
+            presented_device_hash=presented_device_hash,
+            presented_ip=presented_ip,
         )
 
     def _rotate(
@@ -90,6 +100,8 @@ class RefreshTokenRepository:
         replacement_hash: str,
         replacement_expires_at: datetime,
         rotated_at: datetime,
+        presented_device_hash: str | None = None,
+        presented_ip: str | None = None,
     ) -> RefreshRotationResult:
         """Run rotation under a row lock to make reuse detection race-safe."""
         with transaction.atomic():
@@ -105,6 +117,17 @@ class RefreshTokenRepository:
                 return RefreshRotationResult(outcome="reused", refresh_token=refresh_token)
             if refresh_token.expires_at <= rotated_at:
                 return RefreshRotationResult(outcome="expired")
+            if (
+                settings.REFRESH_BIND_DEVICE
+                and refresh_token.device_hash is not None
+                and refresh_token.device_hash != presented_device_hash
+            ):
+                RefreshToken.objects.filter(
+                    family_id=refresh_token.family_id, revoked_at__isnull=True
+                ).update(revoked_at=rotated_at)
+                return RefreshRotationResult(
+                    outcome="binding_mismatch", refresh_token=refresh_token
+                )
 
             refresh_token.revoked_at = rotated_at
             refresh_token.save(update_fields=["revoked_at"])
@@ -114,5 +137,11 @@ class RefreshTokenRepository:
                 family_id=refresh_token.family_id,
                 parent_id=refresh_token.id,
                 expires_at=replacement_expires_at,
+                device_hash=refresh_token.device_hash or presented_device_hash,
+                issued_ip=presented_ip,
             )
-            return RefreshRotationResult(outcome="rotated", refresh_token=replacement)
+            return RefreshRotationResult(
+                outcome="rotated",
+                refresh_token=replacement,
+                previous_issued_ip=refresh_token.issued_ip,
+            )

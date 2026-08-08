@@ -67,6 +67,8 @@ class RefreshToken(models.Model):
     parent = models.ForeignKey(
         "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="children"
     )
+    device_hash = models.CharField(max_length=64, null=True, blank=True)
+    issued_ip = models.GenericIPAddressField(null=True, blank=True)
     expires_at = models.DateTimeField()
     revoked_at = models.DateTimeField(null=True, blank=True)
 

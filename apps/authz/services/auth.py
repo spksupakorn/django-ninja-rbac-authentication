@@ -15,9 +15,10 @@ from apps.accounts.models import User
 from apps.accounts.repositories.users import UserRepository
 from apps.audit.actions import AuditAction
 from apps.audit.context import AuditContext
-from apps.audit.services import AuditService
+from apps.audit.services import AuditService, mask_ip
 from apps.authz.repositories.rbac import AuthzRepository
 from apps.authz.repositories.refresh_tokens import RefreshTokenRepository
+from apps.authz.security.binding import device_hash
 from apps.authz.security.blocklist import BlocklistService
 from apps.authz.security.jwt import encode_access_token
 from apps.authz.security.passwords import hash_password, verify_password
@@ -25,6 +26,7 @@ from apps.common.exceptions import (
     EmailAlreadyExists,
     InvalidCredentials,
     InvalidToken,
+    RefreshTokenBindingMismatch,
     TokenReused,
 )
 
@@ -92,7 +94,7 @@ class AuthService:
             )
             raise InvalidCredentials()
         token_pair = await self._issue_token_pair(
-            user_id=user.id, family_id=uuid4(), parent_id=None
+            user_id=user.id, family_id=uuid4(), parent_id=None, context=context
         )
         await self.audit.record(AuditAction.LOGIN_SUCCESS, context=_context_for_user(context, user))
         return token_pair
@@ -106,7 +108,23 @@ class AuthService:
             replacement_hash=_hash_refresh_token(replacement_refresh_token),
             replacement_expires_at=now + settings.REFRESH_TOKEN_LIFETIME,
             rotated_at=now,
+            presented_device_hash=device_hash(context.user_agent),
+            presented_ip=context.ip,
         )
+        if rotation.outcome == "binding_mismatch":
+            if rotation.refresh_token is not None:
+                await self.blocklist.revoke_user(
+                    rotation.refresh_token.user_id,
+                    now,
+                    ttl=_access_token_ttl_seconds(),
+                )
+                await self.audit.record(
+                    AuditAction.TOKEN_BINDING_MISMATCH,
+                    context=replace(context, actor_id=rotation.refresh_token.user_id),
+                    outcome="failure",
+                    metadata={"family_id": str(rotation.refresh_token.family_id)},
+                )
+            raise RefreshTokenBindingMismatch()
         if rotation.outcome == "reused":
             if rotation.refresh_token is not None:
                 await self.blocklist.revoke_user(
@@ -125,6 +143,20 @@ class AuthService:
             raise InvalidToken()
         if rotation.refresh_token is None:
             raise RuntimeError("A successful refresh rotation must produce a token")
+
+        if (
+            settings.REFRESH_BIND_IP
+            and rotation.previous_issued_ip is not None
+            and rotation.previous_issued_ip != context.ip
+        ):
+            await self.audit.record(
+                AuditAction.TOKEN_IP_CHANGED,
+                context=replace(context, actor_id=rotation.refresh_token.user_id),
+                metadata={
+                    "previous_ip": mask_ip(rotation.previous_issued_ip),
+                    "presented_ip": mask_ip(context.ip),
+                },
+            )
 
         roles = await self.authz.aget_user_role_names(rotation.refresh_token.user_id)
         permissions = await self.authz.aget_user_permission_codes(rotation.refresh_token.user_id)
@@ -183,7 +215,7 @@ class AuthService:
         return user.email
 
     async def _issue_token_pair(
-        self, *, user_id: int, family_id: UUID, parent_id: int | None
+        self, *, user_id: int, family_id: UUID, parent_id: int | None, context: AuditContext
     ) -> TokenPair:
         roles = await self.authz.aget_user_role_names(user_id)
         permissions = await self.authz.aget_user_permission_codes(user_id)
@@ -194,6 +226,8 @@ class AuthService:
             family_id=family_id,
             parent_id=parent_id,
             expires_at=timezone.now() + settings.REFRESH_TOKEN_LIFETIME,
+            device_hash=device_hash(context.user_agent),
+            issued_ip=context.ip,
         )
         return TokenPair(
             access_token=encode_access_token(

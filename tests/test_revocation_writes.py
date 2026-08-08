@@ -13,7 +13,7 @@ from apps.audit.context import AuditContext
 from apps.authz.models import RefreshToken
 from apps.authz.repositories.refresh_tokens import RefreshRotationResult
 from apps.authz.services.auth import AuthService
-from apps.common.exceptions import TokenReused
+from apps.common.exceptions import RefreshTokenBindingMismatch, TokenReused
 
 
 def _access_ttl() -> int:
@@ -64,6 +64,24 @@ async def test_refresh_reuse_revokes_all_access_tokens_for_the_user() -> None:
         await service.refresh(raw_refresh_token="reused-token", context=AuditContext())
 
     blocklist.revoke_user.assert_awaited_once_with(42, ANY, ttl=_access_ttl())
+
+
+@pytest.mark.asyncio
+async def test_refresh_binding_mismatch_revokes_all_access_tokens_for_the_user() -> None:
+    refresh_tokens = AsyncMock()
+    refresh_tokens.arotate.return_value = RefreshRotationResult(
+        outcome="binding_mismatch",
+        refresh_token=cast(RefreshToken, SimpleNamespace(user_id=42, family_id=uuid4())),
+    )
+    blocklist = AsyncMock()
+    audit = AsyncMock()
+    service = AuthService(refresh_tokens=refresh_tokens, audit=audit, blocklist=blocklist)
+
+    with pytest.raises(RefreshTokenBindingMismatch):
+        await service.refresh(raw_refresh_token="mismatched-token", context=AuditContext())
+
+    blocklist.revoke_user.assert_awaited_once_with(42, ANY, ttl=_access_ttl())
+    audit.record.assert_awaited_once()
 
 
 @pytest.mark.asyncio

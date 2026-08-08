@@ -6,6 +6,7 @@ import logging
 import re
 from collections.abc import Mapping
 from dataclasses import replace
+from ipaddress import ip_address, ip_network
 from typing import Literal, Protocol
 
 from apps.accounts.repositories.users import UserRepository
@@ -88,6 +89,18 @@ def sanitize_metadata(metadata: Mapping[str, object] | None) -> dict[str, object
         for key, value in metadata.items()
         if not _is_sensitive_metadata_key(key)
     }
+
+
+def mask_ip(value: str | None) -> str | None:
+    """Return a privacy-preserving network prefix for a valid IP address."""
+    if value is None:
+        return None
+    try:
+        parsed = ip_address(value)
+    except ValueError:
+        return None
+    prefix_length = 24 if parsed.version == 4 else 64
+    return str(ip_network(f"{parsed}/{prefix_length}", strict=False))
 
 
 def _sanitize_value(value: object) -> object:
