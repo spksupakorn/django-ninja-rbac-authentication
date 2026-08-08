@@ -69,9 +69,14 @@ def test_auth_api_register_login_refresh_logout_and_me() -> None:
         client,
         "/api/v1/auth/logout",
         {"refresh_token": refreshed.json()["data"]["refresh_token"]},
+        HTTP_AUTHORIZATION=f"Bearer {refreshed.json()['data']['access_token']}",
     )
     assert logged_out.status_code == 200
     assert logged_out.json()["data"] is None
+    assert client.get(
+        "/api/v1/auth/me",
+        HTTP_AUTHORIZATION=f"Bearer {refreshed.json()['data']['access_token']}",
+    ).status_code == 401
 
 
 @pytest.mark.django_db(transaction=True)

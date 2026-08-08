@@ -5,12 +5,15 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from functools import wraps
 from typing import Any
 
+from asgiref.sync import async_to_sync
 from django.http import HttpRequest
 from ninja.security import HttpBearer
 
+from apps.authz.security.blocklist import BlocklistService
 from apps.authz.security.jwt import decode_access_token
 from apps.common.exceptions import InvalidToken, PermissionDenied
 
@@ -20,14 +23,30 @@ class Principal:
     """Authenticated identity made available as ``request.auth``."""
 
     user_id: int
+    jti: str
+    issued_at: datetime
+    expires_at: datetime
     roles: frozenset[str]
     permissions: frozenset[str]
 
 
 class JWTAuth(HttpBearer):
-    """Authenticate an HS256 access token without a database lookup."""
+    """Authenticate an HS256 access token and reject access-token revocations."""
 
-    def authenticate(self, request: HttpRequest, token: str) -> Principal:
+    def __init__(self, blocklist: BlocklistService | None = None) -> None:
+        self._blocklist = blocklist or BlocklistService()
+
+    def __call__(self, request: HttpRequest) -> Principal | None:
+        """Bridge Ninja's synchronous auth callback interface to async checks."""
+        auth_value = request.headers.get(self.header)
+        if not auth_value:
+            return None
+        parts = auth_value.split(" ")
+        if parts[0].lower() != self.openapi_scheme:
+            return None
+        return async_to_sync(self.authenticate)(request, " ".join(parts[1:]))
+
+    async def authenticate(self, request: HttpRequest, token: str) -> Principal:
         """Decode a bearer token into an authorization principal."""
         del request
         claims = decode_access_token(token)
@@ -37,8 +56,13 @@ class JWTAuth(HttpBearer):
             raise InvalidToken() from exc
         if user_id <= 0:
             raise InvalidToken()
+        if await self._blocklist.is_blocked(claims.token_id, user_id, claims.issued_at):
+            raise InvalidToken()
         return Principal(
             user_id=user_id,
+            jti=claims.token_id,
+            issued_at=claims.issued_at,
+            expires_at=claims.expires_at,
             roles=claims.roles,
             permissions=claims.permissions,
         )

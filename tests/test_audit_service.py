@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping
+from datetime import UTC, datetime
 
 import pytest
 from django.test import RequestFactory, override_settings
@@ -143,7 +144,14 @@ def test_audit_context_snapshots_request_data() -> None:
         HTTP_X_REQUEST_ID="request-123",
         REMOTE_ADDR="203.0.113.10",
     )
-    principal = Principal(user_id=42, roles=frozenset(), permissions=frozenset())
+    principal = Principal(
+        user_id=42,
+        jti="token-1",
+        issued_at=datetime(2026, 8, 8, tzinfo=UTC),
+        expires_at=datetime(2026, 8, 8, 1, tzinfo=UTC),
+        roles=frozenset(),
+        permissions=frozenset(),
+    )
 
     assert AuditContext.from_request(request, principal) == AuditContext(
         actor_id=42,

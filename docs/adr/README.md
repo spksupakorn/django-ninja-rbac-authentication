@@ -14,6 +14,7 @@
 | [0005](0005-async-runtime-and-tooling.md) | Async Django Ninja + uv + Docker Compose + pydantic-settings | Accepted |
 | [0006](0006-login-security-hardening.md) | Argon2 + rate limiting ตอน login | Accepted |
 | [0007](0007-audit-log-strategy.md) | Audit log: security+admin events, service-emit, append-only | Accepted |
+| [0008](0008-redis-throttle-and-blocklist.md) | Redis distributed throttle + token blocklist (per-jti + user-epoch, fail-open) | Accepted |
 
 ## Phase 1 Scope
 

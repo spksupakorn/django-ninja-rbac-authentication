@@ -16,7 +16,7 @@ Backend สำหรับ JWT authentication และ role-based access contro
    cp .env.example .env
    ```
 
-2. Build และเริ่ม PostgreSQL กับ API
+2. Build และเริ่ม PostgreSQL, Redis และ API
 
    ```sh
    docker compose up --build -d
@@ -69,7 +69,8 @@ docker compose down
 | POST | `/api/v1/auth/register` | สมัคร user และ assign role เริ่มต้น |
 | POST | `/api/v1/auth/login` | รับ access/refresh token |
 | POST | `/api/v1/auth/refresh` | rotate refresh token |
-| POST | `/api/v1/auth/logout` | revoke refresh token ปัจจุบัน |
+| POST | `/api/v1/auth/logout` | revoke access token ปัจจุบันและ refresh token ที่ส่งมา |
+| POST | `/api/v1/auth/logout-all` | revoke ทุก access/refresh token ของ user ปัจจุบัน |
 | GET | `/api/v1/auth/me` | ดู claims จาก access token |
 | CRUD | `/api/v1/admin/users` | จัดการ user (ต้องมี permission) |
 | POST | `/api/v1/admin/users/{id}/roles` | assign role (ต้องมี `role.assign`) |
@@ -77,7 +78,9 @@ docker compose down
 | GET | `/api/v1/admin/audit-logs` | ค้นหา audit log (ต้องมี `audit.read`) |
 
 ส่ง access token ด้วย `Authorization: Bearer <access-token>` ทุก endpoint ที่ป้องกันไว้
-การแก้ role/permission จะมีผลกับ access token ที่ออกใหม่; token เดิมอาจคง claims ได้นานสูงสุดตาม `ACCESS_TTL`
+การแก้ role/permission จะมีผลกับ access token ที่ออกใหม่; token เดิมอาจคง claims ได้นานสูงสุดตาม `ACCESS_TTL`.
+แต่ logout, logout-all, refresh-token reuse และการ deactivate user จะ revoke access token ผ่าน Redis ทันที
+เมื่อ Redis พร้อมใช้งาน
 
 ## API response contract
 
@@ -126,7 +129,7 @@ uv run mypy
 uv run pytest --cov --cov-report=term-missing
 ```
 
-test suite ใช้ PostgreSQL จริง และ CI บังคับ lint, type check และ service coverage อย่างน้อย 90%.
+test suite ใช้ PostgreSQL และ Redis จริง และ CI บังคับ lint, type check และ service coverage อย่างน้อย 90%.
 Factory สำหรับ test อยู่ที่ `tests/factories.py`; ใช้สร้าง model fixture ที่ reusable ใน test แบบ synchronous
 ทั้ง Gunicorn และ Uvicorn ตรวจ connection ที่ ASGI lifespan; server จะไม่เริ่มเมื่อ PostgreSQL ไม่พร้อม
 
@@ -141,12 +144,20 @@ Factory สำหรับ test อยู่ที่ `tests/factories.py`; ใ�
 | `REFRESH_TTL` | อายุ refresh token | `7d` |
 | `DEFAULT_USER_ROLE` | role ที่ assign ระหว่าง register/create user | `user` |
 | `THROTTLE_LOGIN` | rate limit ต่อ IP ของ login/refresh | `5/minute` |
+| `REDIS_URL` | Redis สำหรับ distributed throttle และ access-token blocklist | `redis://redis:6379/0` |
 | `ALLOWED_HOSTS` | domain/IP production คั่นด้วย comma | ต้องกำหนดใน production |
 | `TRUSTED_PROXY_CIDRS` | CIDR ของ reverse proxy ที่เชื่อถือได้สำหรับ `X-Forwarded-For` | ว่าง |
 | `DJANGO_SETTINGS_MODULE` | settings module ที่ใช้ boot | `config.settings.dev` |
 
 `config.settings.prod` บังคับ `DEBUG=False`, `ALLOWED_HOSTS`, HTTPS redirect, secure cookies,
 HSTS, `nosniff` และ referrer policy. กำหนด TLS ที่ reverse proxy/load balancer ให้เสร็จก่อนเปิดใช้ production settings.
+
+## Redis failure mode
+
+Redis ใช้ร่วมกันสองส่วน: distributed throttle และ access-token blocklist. หาก Redis ติดต่อไม่ได้ ระบบจะ
+**fail open** เพื่อคง availability: throttle จะไม่จำกัด request ชั่วคราว และ access token ที่ revoke แล้วอาจ
+กลับมาใช้ได้จนหมดอายุ (`ACCESS_TTL`) ทั้งสองกรณีเขียน warning พร้อม traceback เพื่อให้ monitoring แจ้งเตือน
+ได้ จึงควร monitor Redis และ log เหล่านี้ใน production.
 
 ## RBAC seed และการเปลี่ยน catalog
 

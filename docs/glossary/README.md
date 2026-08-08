@@ -39,6 +39,13 @@
 - <a id="best-effort-audit"></a>**Best-effort audit** — การเขียน audit ที่ถ้าล้มเหลวจะ log warning แต่ไม่ทำให้ action (login/assign) rollback → ADR-0007
 - <a id="audit-read"></a>**audit.read** — permission สำหรับอ่าน audit log ผ่าน `GET /api/v1/admin/audit-logs`; seed ให้ role `admin` ด้วย data migration ใหม่ → ADR-0001/0007
 
+## Revocation & Rate limiting
+
+- <a id="blocklist"></a>**Blocklist** — Redis store ที่ทำให้ revoke access token (stateless JWT) ได้ก่อนหมดอายุ; เช็คทุก authenticated request ใน `JWTAuth` → ADR-0008
+- <a id="user-epoch"></a>**User epoch** — timestamp `user_epoch:<uid>` ใน Redis; token ที่ `iat < epoch` ถือว่าถูก revoke ทั้งหมด (ใช้ตอน ban/logout-all/token theft) → ADR-0008
+- <a id="fail-open"></a>**Fail-open** — เมื่อ Redis ล่ม throttle/blocklist ปล่อยผ่าน (+log alert) เพื่อ availability; blocklist ที่ fail-open degrade กลับไป exposure ≤ ACCESS_TTL (baseline ADR-0002) → ADR-0008
+- <a id="distributed-throttle"></a>**Distributed throttle** — rate limit ที่ share ข้าม instance ผ่าน Redis (django-redis) แทน LocMemCache → ADR-0008/0006
+
 ## Runtime & Security
 
 - <a id="asgi"></a>**ASGI** — interface async ของ Python web (แทน WSGI) รันด้วย uvicorn → ADR-0005
