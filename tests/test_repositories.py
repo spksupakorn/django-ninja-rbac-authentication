@@ -12,10 +12,15 @@ from apps.authz.repositories.rbac import AuthzRepository
 async def test_user_repository_creates_and_finds_canonical_email() -> None:
     repository = UserRepository()
 
-    created = await repository.acreate(email="user@example.com")
+    created = await repository.acreate(email="user@example.com", password="encoded-password")
+    credentials = await repository.aget_credentials("USER@EXAMPLE.COM")
 
-    assert await repository.aget_by_email("USER@EXAMPLE.COM") == created
-    assert await repository.aget_or_none(email="missing@example.com") is None
+    assert await repository.aget_by_id(created.id) == created
+    assert await repository.aget_by_id(999_999) is None
+    assert credentials is not None
+    assert credentials.email == "user@example.com"
+    assert credentials.password_hash == "encoded-password"
+    assert not hasattr(created, "password")
 
 
 @pytest.mark.django_db(transaction=True)

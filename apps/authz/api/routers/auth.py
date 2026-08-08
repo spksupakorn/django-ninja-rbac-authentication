@@ -6,7 +6,7 @@ from django.http import HttpRequest
 from django.utils import timezone
 from ninja import Router, Status
 
-from apps.accounts.models import User
+from apps.accounts.repositories.dtos import UserDTO
 from apps.audit.context import AuditContext
 from apps.authz.api.auth import JWTAuth, Principal
 from apps.authz.api.schemas import (
@@ -32,8 +32,14 @@ def _token_pair_response(token_pair: TokenPair) -> TokenPairOut:
     )
 
 
-def _user_out(user: User) -> UserOut:
-    return UserOut.model_validate(user)
+def _user_out(user: UserDTO) -> UserOut:
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        is_active=user.is_active,
+        is_staff=user.is_staff,
+        date_joined=user.date_joined,
+    )
 
 
 def _principal(request: HttpRequest) -> Principal:

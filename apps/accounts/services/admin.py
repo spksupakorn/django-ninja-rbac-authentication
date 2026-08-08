@@ -8,14 +8,14 @@ from django.conf import settings
 from django.db import IntegrityError
 from django.utils import timezone
 
-from apps.accounts.models import User
+from apps.accounts.repositories.dtos import UserDTO
 from apps.accounts.repositories.users import UserRepository
 from apps.audit.actions import AuditAction
 from apps.audit.context import AuditContext
-from apps.audit.models import AuditLog
+from apps.audit.dtos import AuditLogDTO
 from apps.audit.repositories import AuditRepository
 from apps.audit.services import AuditService
-from apps.authz.models import Permission, Role
+from apps.authz.repositories.dtos import PermissionDTO, RoleDTO
 from apps.authz.repositories.rbac import AuthzRepository
 from apps.authz.security.blocklist import BlocklistService
 from apps.authz.security.passwords import hash_password
@@ -45,7 +45,7 @@ class AdminService:
         self.audit = audit or AuditService()
         self.audit_records = audit_records or AuditRepository()
 
-    async def create_user(self, *, email: str, password: str, context: AuditContext) -> User:
+    async def create_user(self, *, email: str, password: str, context: AuditContext) -> UserDTO:
         """Create a user with the default role."""
         user = await self.auth.register(
             email=email,
@@ -61,18 +61,18 @@ class AdminService:
         )
         return user
 
-    async def get_user(self, user_id: int) -> User:
+    async def get_user(self, user_id: int) -> UserDTO:
         """Return a user or raise a domain-level not-found error."""
         user = await self.users.aget_by_id(user_id)
         if user is None:
             raise ResourceNotFound("User not found.")
         return user
 
-    async def list_users(self, *, offset: int, limit: int) -> tuple[list[User], int]:
+    async def list_users(self, *, offset: int, limit: int) -> tuple[list[UserDTO], int]:
         """Return a page of users and the total count."""
         return await self.users.alist(offset=offset, limit=limit), await self.users.acount()
 
-    async def list_roles(self, *, offset: int, limit: int) -> tuple[list[Role], int]:
+    async def list_roles(self, *, offset: int, limit: int) -> tuple[list[RoleDTO], int]:
         """Return a page of roles and the total count."""
         return (
             await self.authz.alist_roles(offset=offset, limit=limit),
@@ -81,7 +81,7 @@ class AdminService:
 
     async def list_permissions(
         self, *, offset: int, limit: int
-    ) -> tuple[list[Permission], int]:
+    ) -> tuple[list[PermissionDTO], int]:
         """Return a page of permission catalog rows and the total count."""
         return (
             await self.authz.alist_permissions(offset=offset, limit=limit),
@@ -98,7 +98,7 @@ class AdminService:
         outcome: str | None = None,
         from_at: datetime | None = None,
         to_at: datetime | None = None,
-    ) -> tuple[list[AuditLog], int]:
+    ) -> tuple[list[AuditLogDTO], int]:
         """Return a filtered page of audit records for investigation."""
         return await self.audit_records.alist(
             offset=offset,
@@ -118,7 +118,7 @@ class AdminService:
         password: str | None = None,
         is_active: bool | None = None,
         context: AuditContext,
-    ) -> User:
+    ) -> UserDTO:
         """Update permitted user fields."""
         fields: dict[str, object] = {}
         if email is not None:

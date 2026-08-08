@@ -4,11 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from ninja import Field, ModelSchema, Schema
+from ninja import Field, Schema
 from pydantic import EmailStr
-
-from apps.accounts.models import User
-from apps.authz.models import Permission, Role
 
 
 class RegisterIn(Schema):
@@ -51,22 +48,22 @@ class MeOut(Schema):
     permissions: list[str]
 
 
-class UserOut(ModelSchema):
-    class Meta:
-        model = User
-        fields = ["id", "email", "is_active", "is_staff", "date_joined"]
+class UserOut(Schema):
+    id: int
+    email: EmailStr
+    is_active: bool
+    is_staff: bool
+    date_joined: datetime
 
 
-class RoleOut(ModelSchema):
-    class Meta:
-        model = Role
-        fields = ["id", "name"]
+class RoleOut(Schema):
+    id: int
+    name: str
 
 
-class PermissionOut(ModelSchema):
-    class Meta:
-        model = Permission
-        fields = ["id", "code"]
+class PermissionOut(Schema):
+    id: int
+    code: str
 
 
 class UsersPageOut(Schema):

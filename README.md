@@ -144,6 +144,17 @@ test suite ใช้ PostgreSQL และ Redis จริง และ CI บั
 Factory สำหรับ test อยู่ที่ `tests/factories.py`; ใช้สร้าง model fixture ที่ reusable ใน test แบบ synchronous
 ทั้ง Gunicorn และ Uvicorn ตรวจ connection ที่ ASGI lifespan; server จะไม่เริ่มเมื่อ PostgreSQL ไม่พร้อม
 
+## Async ORM discipline
+
+- ORM แตะได้เฉพาะ repository; AST test และ `lint-imports` ป้องกัน service/API regressions
+- repository คืน immutable DTO/scalar เท่านั้น ไม่คืน Django model ข้าม boundary
+- multi-write ใช้ `run_in_transaction()` ซึ่งห่อ synchronous `transaction.atomic()` ด้วย
+  `thread_sensitive=True`; password hashing ใช้ `thread_sensitive=False`
+- ASGI ปิด persistent DB connections (`CONN_MAX_AGE=0`); หากต้องการ reuse ให้ใช้ external pool;
+  Redis blocklist ไม่อยู่ใน DB transaction
+
+รายละเอียด audit และข้อจำกัดอยู่ใน [Async ORM hardening plan](docs/ASYNC_ORM_PLAN.md).
+
 ## Environment configuration
 
 | Variable | ความหมาย | ค่า default |

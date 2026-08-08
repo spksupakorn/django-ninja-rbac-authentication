@@ -24,12 +24,33 @@ dependencies = [
 [dependency-groups]
 dev = [
     "factory-boy>=3.3,<4",
+    "import-linter>=2.13,<3",
     "mypy>=1.15,<2",
     "pytest>=8.3,<9",
     "pytest-asyncio>=0.25,<1",
     "pytest-cov>=6.1,<7",
     "pytest-django>=4.10,<5",
     "ruff>=0.11,<1",
+]
+
+[tool.importlinter]
+root_packages = ["apps"]
+
+[[tool.importlinter.contracts]]
+name = "Services and APIs do not import Django models"
+type = "forbidden"
+allow_indirect_imports = true
+source_modules = [
+    "apps.accounts.services",
+    "apps.audit.services",
+    "apps.authz.api",
+    "apps.authz.services",
+    "apps.common.api",
+]
+forbidden_modules = [
+    "apps.accounts.models",
+    "apps.audit.models",
+    "apps.authz.models",
 ]
 
 [tool.pytest.ini_options]
@@ -59,7 +80,13 @@ ignore_missing_imports = true
 
 [tool.coverage.run]
 branch = true
-source = ["apps.accounts.services", "apps.authz.services", "apps.authz.security", "apps.audit.services"]
+source = [
+    "apps.accounts.services",
+    "apps.authz.services",
+    "apps.authz.security",
+    "apps.audit.services",
+    "apps.common.db",
+]
 
 [tool.coverage.report]
 fail_under = 90

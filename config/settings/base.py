@@ -159,7 +159,14 @@ TEMPLATES = [
     },
 ]
 
-DATABASES = {"default": dj_database_url.parse(settings.database_url, conn_max_age=0)}
+DATABASES = {
+    "default": {
+        # Django advises async deployments not to hold persistent connections.
+        # Use an external pool when connection reuse is required instead.
+        **dj_database_url.parse(settings.database_url, conn_max_age=0),
+        "CONN_HEALTH_CHECKS": False,
+    }
+}
 
 # Used by Django Ninja's SimpleRateThrottle.  Redis failures intentionally degrade to
 # an allowed request so a cache outage does not turn into an authentication outage.
