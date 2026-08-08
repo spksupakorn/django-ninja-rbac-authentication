@@ -3,7 +3,7 @@
 from django.http import HttpRequest
 from ninja import Router, Status
 
-from apps.accounts.models import User
+from apps.accounts.repositories.dtos import UserDTO
 from apps.accounts.services.admin import AdminService
 from apps.audit.context import AuditContext
 from apps.authz.api.auth import JWTAuth, Principal, require_permission
@@ -13,8 +13,14 @@ from apps.common.api.schemas import BuildResponse, success_response
 router = Router(tags=["admin-users"])
 
 
-def _user_out(user: User) -> UserOut:
-    return UserOut.model_validate(user)
+def _user_out(user: UserDTO) -> UserOut:
+    return UserOut(
+        id=user.id,
+        email=user.email,
+        is_active=user.is_active,
+        is_staff=user.is_staff,
+        date_joined=user.date_joined,
+    )
 
 
 def _pagination(offset: int, limit: int) -> tuple[int, int]:

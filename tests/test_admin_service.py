@@ -1,5 +1,6 @@
 import pytest
 
+from apps.accounts.models import User
 from apps.accounts.services.admin import AdminService
 from apps.audit.actions import AuditAction
 from apps.audit.context import AuditContext
@@ -31,14 +32,15 @@ async def test_admin_service_updates_user_and_keeps_empty_patch_idempotent() -> 
 
     assert updated.email == "after@example.com"
     assert not updated.is_active
-    assert await verify_password("new-password123", updated.password)
+    stored_user = await User.objects.aget(id=updated.id)
+    assert await verify_password("new-password123", stored_user.password)
     assert unchanged.id == user.id
 
     # Password changes are auditable by field name, but the value never persists.
     audit = await AuditLog.objects.aget(action=AuditAction.USER_UPDATE)
     assert audit.metadata == {"changed_fields": ["email", "is_active", "password"]}
     assert "new-password123" not in str(audit.metadata)
-    assert updated.password not in str(audit.metadata)
+    assert stored_user.password not in str(audit.metadata)
 
 
 @pytest.mark.django_db(transaction=True)

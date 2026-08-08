@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import datetime
 
+from apps.audit.dtos import AuditLogDTO
 from apps.audit.models import AuditLog
 
 
@@ -23,9 +24,9 @@ class AuditRepository:
         ip: str | None,
         user_agent: str | None,
         metadata: Mapping[str, object],
-    ) -> AuditLog:
+    ) -> AuditLogDTO:
         """Append one audit record."""
-        return await AuditLog.objects.acreate(
+        audit_log = await AuditLog.objects.acreate(
             action=action,
             actor_id=actor_id,
             actor_email=actor_email,
@@ -36,11 +37,12 @@ class AuditRepository:
             user_agent=user_agent,
             metadata=dict(metadata),
         )
+        return _audit_log_dto(audit_log)
 
-    async def aget_by_id(self, audit_log_id: int) -> AuditLog | None:
+    async def aget_by_id(self, audit_log_id: int) -> AuditLogDTO | None:
         """Return one record when it exists."""
         try:
-            return await AuditLog.objects.aget(id=audit_log_id)
+            return _audit_log_dto(await AuditLog.objects.aget(id=audit_log_id))
         except AuditLog.DoesNotExist:
             return None
 
@@ -54,7 +56,7 @@ class AuditRepository:
         outcome: str | None = None,
         from_at: datetime | None = None,
         to_at: datetime | None = None,
-    ) -> tuple[list[AuditLog], int]:
+    ) -> tuple[list[AuditLogDTO], int]:
         """Return a filtered, newest-first page of immutable audit records."""
         queryset = AuditLog.objects.all()
         if actor_id is not None:
@@ -70,7 +72,21 @@ class AuditRepository:
 
         total = await queryset.acount()
         page = queryset.order_by("-created_at", "-id")[offset : offset + limit]
-        audit_logs = [
-            audit_log async for audit_log in page
-        ]
+        audit_logs = [_audit_log_dto(audit_log) async for audit_log in page]
         return audit_logs, total
+
+
+def _audit_log_dto(audit_log: AuditLog) -> AuditLogDTO:
+    return AuditLogDTO(
+        id=audit_log.id,
+        created_at=audit_log.created_at,
+        action=audit_log.action,
+        actor_id=audit_log.actor_id,
+        actor_email=audit_log.actor_email,
+        target_type=audit_log.target_type,
+        target_id=audit_log.target_id,
+        outcome=audit_log.outcome,
+        ip=audit_log.ip,
+        user_agent=audit_log.user_agent,
+        metadata=dict(audit_log.metadata),
+    )

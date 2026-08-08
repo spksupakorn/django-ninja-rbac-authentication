@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from asgiref.sync import sync_to_async
-from django.db import transaction
-
 from apps.accounts.models import User
+from apps.accounts.repositories.dtos import UserDTO, user_dto_from_model
 from apps.authz.models import Permission, Role, RolePermission, UserRole
+from apps.authz.repositories.dtos import PermissionDTO, RoleDTO, RolePermissionDTO, UserRoleDTO
+from apps.common.db import run_in_transaction
 
 
 class AuthzRepository:
@@ -14,48 +14,50 @@ class AuthzRepository:
 
     async def acreate_user_with_role(
         self, *, email: str, password_hash: str, role_id: int
-    ) -> User:
+    ) -> UserDTO:
         """Create a user and its role assignment atomically (registration write)."""
-        return await sync_to_async(self._create_user_with_role, thread_sensitive=True)(
+        return await run_in_transaction(
+            self._create_user_with_role,
             email=email, password_hash=password_hash, role_id=role_id
         )
 
-    def _create_user_with_role(self, *, email: str, password_hash: str, role_id: int) -> User:
+    def _create_user_with_role(
+        self, *, email: str, password_hash: str, role_id: int
+    ) -> UserDTO:
         """Persist the user and role link in one transaction so neither can orphan."""
-        with transaction.atomic():
-            user = User.objects.create(
-                email=User.objects.normalize_email(email), password=password_hash
-            )
-            UserRole.objects.create(user_id=user.id, role_id=role_id)
-        return user
+        user = User.objects.create(
+            email=User.objects.normalize_email(email), password=password_hash
+        )
+        UserRole.objects.create(user_id=user.id, role_id=role_id)
+        return user_dto_from_model(user)
 
-    async def aget_role_by_name(self, name: str) -> Role | None:
+    async def aget_role_by_name(self, name: str) -> RoleDTO | None:
         """Find a role by its stable name."""
         try:
-            return await Role.objects.aget(name=name)
+            return _role_dto(await Role.objects.aget(name=name))
         except Role.DoesNotExist:
             return None
 
-    async def aget_role_by_id(self, role_id: int) -> Role | None:
+    async def aget_role_by_id(self, role_id: int) -> RoleDTO | None:
         """Find a role by its primary key."""
         try:
-            return await Role.objects.aget(id=role_id)
+            return _role_dto(await Role.objects.aget(id=role_id))
         except Role.DoesNotExist:
             return None
 
-    async def alist_roles(self, *, offset: int, limit: int) -> list[Role]:
+    async def alist_roles(self, *, offset: int, limit: int) -> list[RoleDTO]:
         """Return a stable page of roles."""
         roles = Role.objects.order_by("id")[offset : offset + limit]
-        return [role async for role in roles]
+        return [_role_dto(role) async for role in roles]
 
     async def acount_roles(self) -> int:
         """Count roles for pagination metadata."""
         return await Role.objects.acount()
 
-    async def alist_permissions(self, *, offset: int, limit: int) -> list[Permission]:
+    async def alist_permissions(self, *, offset: int, limit: int) -> list[PermissionDTO]:
         """Return a stable page of permissions."""
         permissions = Permission.objects.order_by("code")[offset : offset + limit]
-        return [permission async for permission in permissions]
+        return [_permission_dto(permission) async for permission in permissions]
 
     async def acount_permissions(self) -> int:
         """Count permissions for pagination metadata."""
@@ -73,14 +75,22 @@ class AuthzRepository:
         role_names = Role.objects.filter(user_links__user_id=user_id).values_list("name", flat=True)
         return {name async for name in role_names}
 
-    async def aassign_role(self, *, user_id: int, role_id: int) -> UserRole:
+    async def aassign_role(self, *, user_id: int, role_id: int) -> UserRoleDTO:
         """Assign a role to a user, returning an existing assignment if present."""
         assignment, _ = await UserRole.objects.aget_or_create(user_id=user_id, role_id=role_id)
-        return assignment
+        return UserRoleDTO(user_id=assignment.user_id, role_id=assignment.role_id)
 
-    async def agrant_permission(self, *, role_id: int, permission_id: int) -> RolePermission:
+    async def agrant_permission(self, *, role_id: int, permission_id: int) -> RolePermissionDTO:
         """Grant a permission to a role, idempotently."""
         role_permission, _ = await RolePermission.objects.aget_or_create(
             role_id=role_id, permission_id=permission_id
         )
-        return role_permission
+        return RolePermissionDTO(
+            role_id=role_permission.role_id, permission_id=role_permission.permission_id
+        )
+def _role_dto(role: Role) -> RoleDTO:
+    return RoleDTO(id=role.id, name=role.name)
+
+
+def _permission_dto(permission: Permission) -> PermissionDTO:
+    return PermissionDTO(id=permission.id, code=permission.code)

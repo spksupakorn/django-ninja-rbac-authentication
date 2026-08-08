@@ -7,7 +7,7 @@ from ninja import Query, Router
 
 from apps.accounts.services.admin import AdminService
 from apps.audit.actions import AuditAction
-from apps.audit.models import AuditLog
+from apps.audit.dtos import AuditLogDTO
 from apps.authz.api.auth import JWTAuth, require_permission
 from apps.authz.api.schemas import (
     AuditLogOut,
@@ -17,21 +17,21 @@ from apps.authz.api.schemas import (
     RoleOut,
     RolesPageOut,
 )
-from apps.authz.models import Permission, Role
+from apps.authz.repositories.dtos import PermissionDTO, RoleDTO
 from apps.common.api.schemas import BuildResponse, success_response
 
 router = Router(tags=["admin-rbac"])
 
 
-def _role_out(role: Role) -> RoleOut:
-    return RoleOut.model_validate(role)
+def _role_out(role: RoleDTO) -> RoleOut:
+    return RoleOut(id=role.id, name=role.name)
 
 
-def _permission_out(permission: Permission) -> PermissionOut:
-    return PermissionOut.model_validate(permission)
+def _permission_out(permission: PermissionDTO) -> PermissionOut:
+    return PermissionOut(id=permission.id, code=permission.code)
 
 
-def _audit_log_out(audit_log: AuditLog) -> AuditLogOut:
+def _audit_log_out(audit_log: AuditLogDTO) -> AuditLogOut:
     return AuditLogOut(
         id=audit_log.id,
         created_at=audit_log.created_at,

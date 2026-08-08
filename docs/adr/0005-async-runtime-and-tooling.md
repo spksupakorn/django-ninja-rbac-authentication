@@ -55,4 +55,4 @@ config/settings/
 
 ## Related
 
-[[asgi]] · [[async-orm]] · [[sync-to-async]] · [[pydantic-settings]] · [[uv]]
+[[asgi]] · [[async-orm]] · [[sync-to-async]] · [[pydantic-settings]] · [[uv]] · [Async ORM hardening plan](../ASYNC_ORM_PLAN.md)

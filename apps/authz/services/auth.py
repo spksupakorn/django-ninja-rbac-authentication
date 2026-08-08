@@ -11,7 +11,7 @@ from django.conf import settings
 from django.db import IntegrityError
 from django.utils import timezone
 
-from apps.accounts.models import User
+from apps.accounts.repositories.dtos import UserDTO
 from apps.accounts.repositories.users import UserRepository
 from apps.audit.actions import AuditAction
 from apps.audit.context import AuditContext
@@ -64,7 +64,7 @@ class AuthService:
         password: str,
         context: AuditContext,
         record_registration: bool = True,
-    ) -> User:
+    ) -> UserDTO:
         """Register a user and assign the configured default role."""
         default_role = await self.authz.aget_role_by_name(settings.DEFAULT_USER_ROLE)
         if default_role is None:
@@ -83,9 +83,11 @@ class AuthService:
 
     async def login(self, *, email: str, password: str, context: AuditContext) -> TokenPair:
         """Verify credentials and issue a new refresh-token family."""
-        user = await self.users.aget_by_email(email)
-        is_valid = await verify_password(password, user.password if user else None)
-        if user is None or not user.is_active or not is_valid:
+        credentials = await self.users.aget_credentials(email)
+        is_valid = await verify_password(
+            password, credentials.password_hash if credentials else None
+        )
+        if credentials is None or not credentials.is_active or not is_valid:
             await self.audit.record(
                 AuditAction.LOGIN_FAILURE,
                 context=context,
@@ -94,9 +96,12 @@ class AuthService:
             )
             raise InvalidCredentials()
         token_pair = await self._issue_token_pair(
-            user_id=user.id, family_id=uuid4(), parent_id=None, context=context
+            user_id=credentials.id, family_id=uuid4(), parent_id=None, context=context
         )
-        await self.audit.record(AuditAction.LOGIN_SUCCESS, context=_context_for_user(context, user))
+        await self.audit.record(
+            AuditAction.LOGIN_SUCCESS,
+            context=replace(context, actor_id=credentials.id, actor_email=credentials.email),
+        )
         return token_pair
 
     async def refresh(self, *, raw_refresh_token: str, context: AuditContext) -> TokenPair:
@@ -249,6 +254,6 @@ def _access_token_ttl_seconds() -> int:
     return max(1, int(settings.ACCESS_TOKEN_LIFETIME.total_seconds()))
 
 
-def _context_for_user(context: AuditContext, user: User) -> AuditContext:
+def _context_for_user(context: AuditContext, user: UserDTO) -> AuditContext:
     """Keep the request data while snapshotting the actor that just authenticated."""
     return replace(context, actor_id=user.id, actor_email=user.email)

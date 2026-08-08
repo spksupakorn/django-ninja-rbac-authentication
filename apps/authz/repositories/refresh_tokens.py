@@ -7,11 +7,11 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from asgiref.sync import sync_to_async
 from django.conf import settings
-from django.db import transaction
 
 from apps.authz.models import RefreshToken
+from apps.authz.repositories.dtos import RefreshTokenDTO
+from apps.common.db import run_in_transaction
 
 
 @dataclass(frozen=True)
@@ -19,17 +19,17 @@ class RefreshRotationResult:
     """The outcome of an atomic refresh-token rotation attempt."""
 
     outcome: Literal["rotated", "missing", "expired", "reused", "binding_mismatch"]
-    refresh_token: RefreshToken | None = None
+    refresh_token: RefreshTokenDTO | None = None
     previous_issued_ip: str | None = None
 
 
 class RefreshTokenRepository:
     """Persist and revoke refresh-token rotation families."""
 
-    async def aget_by_hash(self, token_hash: str) -> RefreshToken | None:
+    async def aget_by_hash(self, token_hash: str) -> RefreshTokenDTO | None:
         """Look up a refresh token by its one-way hash."""
         try:
-            return await RefreshToken.objects.aget(token_hash=token_hash)
+            return _refresh_token_dto(await RefreshToken.objects.aget(token_hash=token_hash))
         except RefreshToken.DoesNotExist:
             return None
 
@@ -43,9 +43,9 @@ class RefreshTokenRepository:
         expires_at: datetime,
         device_hash: str | None = None,
         issued_ip: str | None = None,
-    ) -> RefreshToken:
+    ) -> RefreshTokenDTO:
         """Store a newly issued refresh token."""
-        return await RefreshToken.objects.acreate(
+        refresh_token = await RefreshToken.objects.acreate(
             user_id=user_id,
             token_hash=token_hash,
             family_id=family_id,
@@ -54,6 +54,7 @@ class RefreshTokenRepository:
             device_hash=device_hash,
             issued_ip=issued_ip,
         )
+        return _refresh_token_dto(refresh_token)
 
     async def arevoke(self, token_id: int, revoked_at: datetime) -> None:
         """Revoke one refresh token if it is still active."""
@@ -84,7 +85,8 @@ class RefreshTokenRepository:
         presented_ip: str | None = None,
     ) -> RefreshRotationResult:
         """Atomically consume a refresh token and create its replacement."""
-        return await sync_to_async(self._rotate, thread_sensitive=True)(
+        return await run_in_transaction(
+            self._rotate,
             token_hash=token_hash,
             replacement_hash=replacement_hash,
             replacement_expires_at=replacement_expires_at,
@@ -104,44 +106,59 @@ class RefreshTokenRepository:
         presented_ip: str | None = None,
     ) -> RefreshRotationResult:
         """Run rotation under a row lock to make reuse detection race-safe."""
-        with transaction.atomic():
-            try:
-                refresh_token = RefreshToken.objects.select_for_update().get(token_hash=token_hash)
-            except RefreshToken.DoesNotExist:
-                return RefreshRotationResult(outcome="missing")
+        try:
+            refresh_token = RefreshToken.objects.select_for_update().get(token_hash=token_hash)
+        except RefreshToken.DoesNotExist:
+            return RefreshRotationResult(outcome="missing")
 
-            if refresh_token.revoked_at is not None:
-                RefreshToken.objects.filter(
-                    family_id=refresh_token.family_id, revoked_at__isnull=True
-                ).update(revoked_at=rotated_at)
-                return RefreshRotationResult(outcome="reused", refresh_token=refresh_token)
-            if refresh_token.expires_at <= rotated_at:
-                return RefreshRotationResult(outcome="expired")
-            if (
-                settings.REFRESH_BIND_DEVICE
-                and refresh_token.device_hash is not None
-                and refresh_token.device_hash != presented_device_hash
-            ):
-                RefreshToken.objects.filter(
-                    family_id=refresh_token.family_id, revoked_at__isnull=True
-                ).update(revoked_at=rotated_at)
-                return RefreshRotationResult(
-                    outcome="binding_mismatch", refresh_token=refresh_token
-                )
-
-            refresh_token.revoked_at = rotated_at
-            refresh_token.save(update_fields=["revoked_at"])
-            replacement = RefreshToken.objects.create(
-                user_id=refresh_token.user_id,
-                token_hash=replacement_hash,
-                family_id=refresh_token.family_id,
-                parent_id=refresh_token.id,
-                expires_at=replacement_expires_at,
-                device_hash=refresh_token.device_hash or presented_device_hash,
-                issued_ip=presented_ip,
-            )
+        if refresh_token.revoked_at is not None:
+            RefreshToken.objects.filter(
+                family_id=refresh_token.family_id, revoked_at__isnull=True
+            ).update(revoked_at=rotated_at)
             return RefreshRotationResult(
-                outcome="rotated",
-                refresh_token=replacement,
-                previous_issued_ip=refresh_token.issued_ip,
+                outcome="reused", refresh_token=_refresh_token_dto(refresh_token)
             )
+        if refresh_token.expires_at <= rotated_at:
+            return RefreshRotationResult(outcome="expired")
+        if (
+            settings.REFRESH_BIND_DEVICE
+            and refresh_token.device_hash is not None
+            and refresh_token.device_hash != presented_device_hash
+        ):
+            RefreshToken.objects.filter(
+                family_id=refresh_token.family_id, revoked_at__isnull=True
+            ).update(revoked_at=rotated_at)
+            return RefreshRotationResult(
+                outcome="binding_mismatch", refresh_token=_refresh_token_dto(refresh_token)
+            )
+
+        refresh_token.revoked_at = rotated_at
+        refresh_token.save(update_fields=["revoked_at"])
+        replacement = RefreshToken.objects.create(
+            user_id=refresh_token.user_id,
+            token_hash=replacement_hash,
+            family_id=refresh_token.family_id,
+            parent_id=refresh_token.id,
+            expires_at=replacement_expires_at,
+            device_hash=refresh_token.device_hash or presented_device_hash,
+            issued_ip=presented_ip,
+        )
+        return RefreshRotationResult(
+            outcome="rotated",
+            refresh_token=_refresh_token_dto(replacement),
+            previous_issued_ip=refresh_token.issued_ip,
+        )
+
+
+def _refresh_token_dto(refresh_token: RefreshToken) -> RefreshTokenDTO:
+    return RefreshTokenDTO(
+        id=refresh_token.id,
+        user_id=refresh_token.user_id,
+        token_hash=refresh_token.token_hash,
+        family_id=refresh_token.family_id,
+        parent_id=refresh_token.parent_id,
+        device_hash=refresh_token.device_hash,
+        issued_ip=refresh_token.issued_ip,
+        expires_at=refresh_token.expires_at,
+        revoked_at=refresh_token.revoked_at,
+    )
