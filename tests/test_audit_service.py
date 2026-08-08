@@ -12,7 +12,7 @@ from apps.audit.actions import AuditAction
 from apps.audit.context import AuditContext
 from apps.audit.models import AuditLog
 from apps.audit.repositories import AuditRepository
-from apps.audit.services import AuditService, sanitize_metadata
+from apps.audit.services import AuditService, mask_ip, sanitize_metadata
 from apps.authz.api.auth import Principal
 
 
@@ -187,3 +187,16 @@ def test_sanitize_metadata_removes_sensitive_key_variants() -> None:
     assert sanitize_metadata(
         {"accessToken": "secret", "family_id": "allowed", "api-secret": "secret"}
     ) == {"family_id": "allowed"}
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("192.0.2.42", "192.0.2.0/24"),
+        ("2001:db8::42", "2001:db8::/64"),
+        ("not-an-ip", None),
+        (None, None),
+    ],
+)
+def test_mask_ip_redacts_host_addresses(value: str | None, expected: str | None) -> None:
+    assert mask_ip(value) == expected

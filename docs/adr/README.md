@@ -15,6 +15,7 @@
 | [0006](0006-login-security-hardening.md) | Argon2 + rate limiting ตอน login | Accepted |
 | [0007](0007-audit-log-strategy.md) | Audit log: security+admin events, service-emit, append-only | Accepted |
 | [0008](0008-redis-throttle-and-blocklist.md) | Redis distributed throttle + token blocklist (per-jti + user-epoch, fail-open) | Accepted |
+| [0009](0009-refresh-token-binding.md) | Refresh token binding: device strict + IP soft (family-level, grandfathered) | Accepted |
 
 ## Phase 1 Scope
 

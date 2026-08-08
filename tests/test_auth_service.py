@@ -1,10 +1,20 @@
-import pytest
+from unittest.mock import AsyncMock
 
+import pytest
+from django.test import override_settings
+
+from apps.audit.actions import AuditAction
 from apps.audit.context import AuditContext
+from apps.audit.models import AuditLog
 from apps.authz.models import RefreshToken, Role
 from apps.authz.security.jwt import decode_access_token
 from apps.authz.services.auth import AuthService
-from apps.common.exceptions import EmailAlreadyExists, InvalidToken, TokenReused
+from apps.common.exceptions import (
+    EmailAlreadyExists,
+    InvalidToken,
+    RefreshTokenBindingMismatch,
+    TokenReused,
+)
 
 CONTEXT = AuditContext()
 
@@ -94,3 +104,56 @@ async def test_refresh_rejects_an_unknown_token_and_logout_is_idempotent() -> No
         await service.refresh(raw_refresh_token="unknown-token", context=CONTEXT)
 
     await service.logout(raw_refresh_token="unknown-token", context=CONTEXT)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+async def test_refresh_device_mismatch_revokes_family_and_records_audit_event() -> None:
+    await Role.objects.aget_or_create(name="user")
+    blocklist = AsyncMock()
+    service = AuthService(blocklist=blocklist)
+    await service.register(email="user@example.com", password="password", context=CONTEXT)
+    login_context = AuditContext(ip="192.0.2.1", user_agent="device-a")
+    token_pair = await service.login(
+        email="user@example.com", password="password", context=login_context
+    )
+
+    with pytest.raises(RefreshTokenBindingMismatch):
+        await service.refresh(
+            raw_refresh_token=token_pair.refresh_token,
+            context=AuditContext(ip="192.0.2.2", user_agent="device-b"),
+        )
+
+    tokens = [token async for token in RefreshToken.objects.all()]
+    audit_log = await AuditLog.objects.aget(action=AuditAction.TOKEN_BINDING_MISMATCH)
+    assert all(token.revoked_at is not None for token in tokens)
+    blocklist.revoke_user.assert_awaited_once()
+    assert audit_log.outcome == "failure"
+    assert set(audit_log.metadata) == {"family_id"}
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.asyncio
+async def test_refresh_ip_change_is_audited_without_revoking_access_tokens() -> None:
+    await Role.objects.aget_or_create(name="user")
+    blocklist = AsyncMock()
+    service = AuthService(blocklist=blocklist)
+    await service.register(email="user@example.com", password="password", context=CONTEXT)
+    token_pair = await service.login(
+        email="user@example.com",
+        password="password",
+        context=AuditContext(ip="192.0.2.1", user_agent="device-a"),
+    )
+
+    with override_settings(REFRESH_BIND_IP=True):
+        await service.refresh(
+            raw_refresh_token=token_pair.refresh_token,
+            context=AuditContext(ip="198.51.100.2", user_agent="device-a"),
+        )
+
+    audit_log = await AuditLog.objects.aget(action=AuditAction.TOKEN_IP_CHANGED)
+    blocklist.revoke_user.assert_not_awaited()
+    assert audit_log.metadata == {
+        "previous_ip": "192.0.2.0/24",
+        "presented_ip": "198.51.100.0/24",
+    }

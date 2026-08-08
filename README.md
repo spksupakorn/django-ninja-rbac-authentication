@@ -82,6 +82,17 @@ docker compose down
 แต่ logout, logout-all, refresh-token reuse และการ deactivate user จะ revoke access token ผ่าน Redis ทันที
 เมื่อ Redis พร้อมใช้งาน
 
+## Refresh-token binding
+
+ทุก refresh-token family ที่ออกใหม่จะผูกกับ hash ของ `User-Agent` และ IP ตอน login. โดย default
+device binding เป็นแบบ strict: refresh ด้วย User-Agent ต่างกัน (หรือไม่มี header) จะ revoke ทั้ง family
+รวมถึง access token ของ user และต้อง login ใหม่. การอัปเดต browser/app ที่ทำให้ User-Agent เปลี่ยนอาจ
+ทำให้ logout ได้; ตั้ง `REFRESH_BIND_DEVICE=false` ชั่วคราวได้หาก policy นี้ไม่เหมาะกับ deployment.
+
+IP ไม่ทำให้ refresh ถูกปฏิเสธ เพราะผู้ใช้เปลี่ยนเครือข่ายได้ตามปกติ. เมื่อเปิด `REFRESH_BIND_IP=true`
+ระบบจะบันทึก audit `token.ip_changed` ด้วย IP แบบ mask เพื่อช่วยตรวจสอบเท่านั้น. Token ที่ออกก่อนเพิ่ม
+feature นี้ (`device_hash` เป็น `null`) จะยัง refresh ได้หนึ่งครั้ง แล้ว binding จะถูกสร้างให้ token ใหม่.
+
 ## API response contract
 
 ทุก API response ใช้ envelope เดียวกัน โดย `code` สอดคล้องกับ HTTP status:
@@ -142,6 +153,8 @@ Factory สำหรับ test อยู่ที่ `tests/factories.py`; ใ�
 | `JWT_SECRET` | HS256 JWT signing secret; ต้องแยกจาก Django secret | ต้องกำหนด |
 | `ACCESS_TTL` | อายุ access token (`15m`, `1h`, `7d`) | `15m` |
 | `REFRESH_TTL` | อายุ refresh token | `7d` |
+| `REFRESH_BIND_DEVICE` | บังคับ User-Agent binding ของ refresh token; mismatch revoke family | `true` |
+| `REFRESH_BIND_IP` | audit เมื่อ IP ของ refresh เปลี่ยน (soft check, ไม่ revoke) | `false` |
 | `DEFAULT_USER_ROLE` | role ที่ assign ระหว่าง register/create user | `user` |
 | `THROTTLE_LOGIN` | rate limit ต่อ IP ของ login/refresh | `5/minute` |
 | `REDIS_URL` | Redis สำหรับ distributed throttle และ access-token blocklist | `redis://redis:6379/0` |

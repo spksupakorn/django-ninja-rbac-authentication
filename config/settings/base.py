@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     refresh_ttl: timedelta = Field(
         default_factory=lambda: parse_ttl("7d"), validation_alias="REFRESH_TTL"
     )
+    refresh_bind_device: bool = Field(default=True, validation_alias="REFRESH_BIND_DEVICE")
+    refresh_bind_ip: bool = Field(default=False, validation_alias="REFRESH_BIND_IP")
     default_user_role: str = Field(default="user", validation_alias="DEFAULT_USER_ROLE")
     throttle_login: str = Field(default="5/minute", validation_alias="THROTTLE_LOGIN")
     redis_url: str = Field(default="redis://redis:6379/0", validation_alias="REDIS_URL")
@@ -184,6 +186,8 @@ STATIC_URL = "static/"
 JWT_SECRET = settings.jwt_secret
 ACCESS_TTL = settings.access_ttl
 REFRESH_TTL = settings.refresh_ttl
+REFRESH_BIND_DEVICE = settings.refresh_bind_device
+REFRESH_BIND_IP = settings.refresh_bind_ip
 DEFAULT_USER_ROLE = settings.default_user_role
 TRUSTED_PROXY_CIDRS = settings.trusted_proxy_cidrs
 THROTTLE_LOGIN = settings.throttle_login

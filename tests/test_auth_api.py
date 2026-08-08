@@ -8,7 +8,7 @@ from django.test import Client
 
 from apps.audit.actions import AuditAction
 from apps.audit.models import AuditLog
-from apps.authz.models import Role
+from apps.authz.models import RefreshToken, Role
 from apps.authz.permissions import PERMISSION_CATALOG
 from apps.authz.security.jwt import encode_access_token
 from tests.factories import AuditLogFactory, RoleFactory
@@ -365,3 +365,71 @@ def test_auth_api_envelopes_unauthorized_and_validation_errors() -> None:
     assert unauthorized.json()["message"] == "Authentication failed."
     assert invalid_request.status_code == 422
     assert invalid_request.json()["message"] == "Invalid request."
+
+
+@pytest.mark.django_db(transaction=True)
+def test_refresh_api_rejects_a_different_user_agent_and_revokes_the_session() -> None:
+    cache.clear()
+    Role.objects.get_or_create(name="user")
+    client = Client()
+    _json_post(
+        client,
+        "/api/v1/auth/register",
+        {"email": "user@example.com", "password": "password123"},
+    )
+    logged_in = _json_post(
+        client,
+        "/api/v1/auth/login",
+        {"email": "user@example.com", "password": "password123"},
+        HTTP_USER_AGENT="device-a",
+    )
+    refreshed = _json_post(
+        client,
+        "/api/v1/auth/refresh",
+        {"refresh_token": logged_in.json()["data"]["refresh_token"]},
+        HTTP_USER_AGENT="device-a",
+    )
+    assert {"device_hash", "issued_ip"}.isdisjoint(refreshed.json()["data"])
+    mismatched = _json_post(
+        client,
+        "/api/v1/auth/refresh",
+        {"refresh_token": refreshed.json()["data"]["refresh_token"]},
+        HTTP_USER_AGENT="device-b",
+    )
+
+    assert refreshed.status_code == 200
+    assert mismatched.status_code == 401
+    assert mismatched.json()["message"] == "Authentication failed."
+    assert all(token.revoked_at is not None for token in RefreshToken.objects.all())
+    assert AuditLog.objects.filter(action=AuditAction.TOKEN_BINDING_MISMATCH).exists()
+    assert client.get(
+        "/api/v1/auth/me",
+        HTTP_AUTHORIZATION=f"Bearer {refreshed.json()['data']['access_token']}",
+    ).status_code == 401
+
+
+@pytest.mark.django_db(transaction=True)
+def test_refresh_api_rejects_a_missing_user_agent_for_a_bound_token() -> None:
+    cache.clear()
+    Role.objects.get_or_create(name="user")
+    client = Client()
+    _json_post(
+        client,
+        "/api/v1/auth/register",
+        {"email": "user@example.com", "password": "password123"},
+    )
+    logged_in = _json_post(
+        client,
+        "/api/v1/auth/login",
+        {"email": "user@example.com", "password": "password123"},
+        HTTP_USER_AGENT="device-a",
+    )
+
+    missing_user_agent = _json_post(
+        client,
+        "/api/v1/auth/refresh",
+        {"refresh_token": logged_in.json()["data"]["refresh_token"]},
+    )
+
+    assert missing_user_agent.status_code == 401
+    assert all(token.revoked_at is not None for token in RefreshToken.objects.all())

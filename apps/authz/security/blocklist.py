@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from datetime import datetime
 
 from redis.asyncio import Redis
@@ -36,7 +37,9 @@ class BlocklistService:
         if ttl <= 0:
             return
         try:
-            await self._client().set(self._user_epoch_key(user_id), int(at.timestamp()), ex=ttl)
+            await self._client().set(
+                self._user_epoch_key(user_id), math.ceil(at.timestamp()), ex=ttl
+            )
         except Exception:
             logger.warning("Unable to revoke user tokens in Redis", exc_info=True)
 
