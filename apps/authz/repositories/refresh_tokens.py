@@ -61,6 +61,12 @@ class RefreshTokenRepository:
             family_id=family_id, revoked_at__isnull=True
         ).aupdate(revoked_at=revoked_at)
 
+    async def arevoke_user(self, user_id: int, revoked_at: datetime) -> None:
+        """Revoke every active refresh token for a user."""
+        await RefreshToken.objects.filter(user_id=user_id, revoked_at__isnull=True).aupdate(
+            revoked_at=revoked_at
+        )
+
     async def arotate(
         self,
         *,

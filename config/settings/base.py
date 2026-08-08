@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     )
     default_user_role: str = Field(default="user", validation_alias="DEFAULT_USER_ROLE")
     throttle_login: str = Field(default="5/minute", validation_alias="THROTTLE_LOGIN")
+    redis_url: str = Field(default="redis://redis:6379/0", validation_alias="REDIS_URL")
     allowed_hosts: list[str] = Field(default_factory=list, validation_alias="ALLOWED_HOSTS")
     trusted_proxy_cidrs: list[str] = Field(
         default_factory=list, validation_alias="TRUSTED_PROXY_CIDRS"
@@ -158,6 +159,17 @@ TEMPLATES = [
 
 DATABASES = {"default": dj_database_url.parse(settings.database_url, conn_max_age=0)}
 
+# Used by Django Ninja's SimpleRateThrottle.  Redis failures intentionally degrade to
+# an allowed request so a cache outage does not turn into an authentication outage.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": settings.redis_url,
+        "OPTIONS": {"IGNORE_EXCEPTIONS": True},
+        "KEY_PREFIX": "rbac_auth",
+    }
+}
+
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
@@ -175,5 +187,6 @@ REFRESH_TTL = settings.refresh_ttl
 DEFAULT_USER_ROLE = settings.default_user_role
 TRUSTED_PROXY_CIDRS = settings.trusted_proxy_cidrs
 THROTTLE_LOGIN = settings.throttle_login
+REDIS_URL = settings.redis_url
 ACCESS_TOKEN_LIFETIME = settings.access_ttl
 REFRESH_TOKEN_LIFETIME = settings.refresh_ttl

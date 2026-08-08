@@ -1,5 +1,7 @@
 from collections.abc import Awaitable
+from datetime import UTC, datetime
 from typing import Any, cast
+from unittest.mock import AsyncMock
 
 import pytest
 from django.http import HttpRequest, HttpResponse
@@ -34,24 +36,55 @@ def _protected_api() -> NinjaAPI:
     return api
 
 
-def test_jwt_auth_returns_principal_from_bearer_token() -> None:
+@pytest.mark.asyncio
+async def test_jwt_auth_returns_principal_from_bearer_token() -> None:
     token = encode_access_token(subject=42, roles={"user"}, permissions={"user.read"})
     request = RequestFactory().get("/api/protected")
+    blocklist = AsyncMock()
+    blocklist.is_blocked.return_value = False
 
-    principal = JWTAuth().authenticate(request, token)
+    principal = await JWTAuth(blocklist=blocklist).authenticate(request, token)
 
-    assert principal == Principal(
-        user_id=42,
-        roles=frozenset({"user"}),
-        permissions=frozenset({"user.read"}),
-    )
+    assert principal.user_id == 42
+    assert principal.roles == frozenset({"user"})
+    assert principal.permissions == frozenset({"user.read"})
+    assert principal.jti
+    assert principal.issued_at.tzinfo is UTC
+    assert principal.expires_at > principal.issued_at
+    blocklist.is_blocked.assert_awaited_once_with(principal.jti, 42, principal.issued_at)
 
 
-def test_jwt_auth_rejects_non_numeric_subject() -> None:
+@pytest.mark.asyncio
+async def test_jwt_auth_rejects_non_numeric_subject() -> None:
     token = encode_access_token(subject="not-a-user-id", roles=[], permissions=[])
 
     with pytest.raises(InvalidToken):
-        JWTAuth().authenticate(RequestFactory().get("/api/protected"), token)
+        await JWTAuth().authenticate(RequestFactory().get("/api/protected"), token)
+
+
+@pytest.mark.asyncio
+async def test_jwt_auth_rejects_a_blocked_token() -> None:
+    token = encode_access_token(subject=42, roles={"user"}, permissions={"user.read"})
+    blocklist = AsyncMock()
+    blocklist.is_blocked.return_value = True
+
+    with pytest.raises(InvalidToken):
+        await JWTAuth(blocklist=blocklist).authenticate(
+            RequestFactory().get("/api/protected"), token
+        )
+
+
+@pytest.mark.asyncio
+async def test_jwt_auth_allows_when_blocklist_fails_open() -> None:
+    token = encode_access_token(subject=42, roles={"user"}, permissions={"user.read"})
+    blocklist = AsyncMock()
+    blocklist.is_blocked.return_value = False
+
+    principal = await JWTAuth(blocklist=blocklist).authenticate(
+        RequestFactory().get("/api/protected"), token
+    )
+
+    assert principal.user_id == 42
 
 
 def test_permission_guard_rejects_missing_permission() -> None:
@@ -60,7 +93,14 @@ def test_permission_guard_rejects_missing_permission() -> None:
         return {"ok": True}
 
     request = RequestFactory().get("/api/protected")
-    request.auth = Principal(user_id=42, roles=frozenset({"user"}), permissions=frozenset())
+    request.auth = Principal(
+        user_id=42,
+        jti="token-1",
+        issued_at=datetime(2026, 8, 8, tzinfo=UTC),
+        expires_at=datetime(2026, 8, 8, 1, tzinfo=UTC),
+        roles=frozenset({"user"}),
+        permissions=frozenset(),
+    )
 
     with pytest.raises(PermissionDenied):
         protected(request)
@@ -74,6 +114,9 @@ def test_permission_guard_allows_granted_permission() -> None:
     request = RequestFactory().get("/api/protected")
     request.auth = Principal(
         user_id=42,
+        jti="token-1",
+        issued_at=datetime(2026, 8, 8, tzinfo=UTC),
+        expires_at=datetime(2026, 8, 8, 1, tzinfo=UTC),
         roles=frozenset({"user"}),
         permissions=frozenset({"user.read"}),
     )

@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.cache import cache
 from django.http import HttpRequest
 from django.test import RequestFactory
@@ -5,6 +6,14 @@ from ninja import NinjaAPI
 from ninja.testing import TestClient
 
 from apps.common.throttling import LoginRateThrottle
+
+
+def test_default_cache_uses_redis_with_fail_open_errors() -> None:
+    cache_config = settings.CACHES["default"]
+
+    assert cache_config["BACKEND"] == "django_redis.cache.RedisCache"
+    assert cache_config["OPTIONS"]["IGNORE_EXCEPTIONS"] is True
+    assert cache_config["KEY_PREFIX"] == "rbac_auth"
 
 
 def test_login_rate_throttle_limits_requests_by_ip() -> None:

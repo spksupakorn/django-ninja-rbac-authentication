@@ -18,6 +18,7 @@ from apps.audit.context import AuditContext
 from apps.audit.services import AuditService
 from apps.authz.repositories.rbac import AuthzRepository
 from apps.authz.repositories.refresh_tokens import RefreshTokenRepository
+from apps.authz.security.blocklist import BlocklistService
 from apps.authz.security.jwt import encode_access_token
 from apps.authz.security.passwords import hash_password, verify_password
 from apps.common.exceptions import (
@@ -46,11 +47,13 @@ class AuthService:
         authz: AuthzRepository | None = None,
         refresh_tokens: RefreshTokenRepository | None = None,
         audit: AuditService | None = None,
+        blocklist: BlocklistService | None = None,
     ) -> None:
         self.users = users or UserRepository()
         self.authz = authz or AuthzRepository()
         self.refresh_tokens = refresh_tokens or RefreshTokenRepository()
         self.audit = audit or AuditService()
+        self.blocklist = blocklist or BlocklistService()
 
     async def register(
         self,
@@ -106,6 +109,11 @@ class AuthService:
         )
         if rotation.outcome == "reused":
             if rotation.refresh_token is not None:
+                await self.blocklist.revoke_user(
+                    rotation.refresh_token.user_id,
+                    now,
+                    ttl=_access_token_ttl_seconds(),
+                )
                 await self.audit.record(
                     AuditAction.TOKEN_REUSE_DETECTED,
                     context=replace(context, actor_id=rotation.refresh_token.user_id),
@@ -135,8 +143,17 @@ class AuthService:
         )
         return token_pair
 
-    async def logout(self, *, raw_refresh_token: str, context: AuditContext) -> None:
+    async def logout(
+        self,
+        *,
+        raw_refresh_token: str,
+        context: AuditContext,
+        access_token_jti: str | None = None,
+        access_token_ttl: int | None = None,
+    ) -> None:
         """Revoke one refresh token; unknown tokens make logout idempotent."""
+        if access_token_jti is not None and access_token_ttl is not None:
+            await self.blocklist.block_token(access_token_jti, access_token_ttl)
         token_hash = _hash_refresh_token(raw_refresh_token)
         refresh_token = await self.refresh_tokens.aget_by_hash(token_hash)
         if refresh_token is not None:
@@ -146,6 +163,17 @@ class AuthService:
                 context=replace(context, actor_id=refresh_token.user_id),
                 metadata={"family_id": str(refresh_token.family_id)},
             )
+
+    async def logout_all(self, *, user_id: int, context: AuditContext) -> None:
+        """Revoke every refresh and access token belonging to a user."""
+        now = timezone.now()
+        await self.blocklist.revoke_user(user_id, now, ttl=_access_token_ttl_seconds())
+        await self.refresh_tokens.arevoke_user(user_id, now)
+        await self.audit.record(
+            AuditAction.LOGOUT,
+            context=replace(context, actor_id=user_id),
+            metadata={"scope": "all"},
+        )
 
     async def aget_active_email(self, user_id: int) -> str:
         """Return the identity's email, rejecting tokens for deleted users."""
@@ -180,6 +208,11 @@ class AuthService:
 def _hash_refresh_token(raw_refresh_token: str) -> str:
     """Return the fixed-size, one-way database representation of a token."""
     return hashlib.sha256(raw_refresh_token.encode("utf-8")).hexdigest()
+
+
+def _access_token_ttl_seconds() -> int:
+    """Return the maximum useful Redis lifetime for access-token revocations."""
+    return max(1, int(settings.ACCESS_TOKEN_LIFETIME.total_seconds()))
 
 
 def _context_for_user(context: AuditContext, user: User) -> AuditContext:

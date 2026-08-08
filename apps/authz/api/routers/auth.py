@@ -1,6 +1,9 @@
 """Authentication endpoints."""
 
+from math import ceil
+
 from django.http import HttpRequest
+from django.utils import timezone
 from ninja import Router, Status
 
 from apps.accounts.models import User
@@ -31,6 +34,17 @@ def _token_pair_response(token_pair: TokenPair) -> TokenPairOut:
 
 def _user_out(user: User) -> UserOut:
     return UserOut.model_validate(user)
+
+
+def _principal(request: HttpRequest) -> Principal:
+    principal = request.auth
+    if not isinstance(principal, Principal):
+        raise RuntimeError("JWTAuth did not supply a principal")
+    return principal
+
+
+def _remaining_access_ttl(principal: Principal) -> int:
+    return max(0, ceil((principal.expires_at - timezone.now()).total_seconds()))
 
 
 @router.post(
@@ -68,13 +82,28 @@ async def refresh(request: HttpRequest, payload: RefreshIn) -> BuildResponse[Tok
     return success_response(_token_pair_response(token_pair), message="Token refreshed.")
 
 
-@router.post("/logout", response=BuildResponse[None])
+@router.post("/logout", auth=JWTAuth(), response=BuildResponse[None])
 async def logout(request: HttpRequest, payload: LogoutIn) -> BuildResponse[None]:
-    """Revoke the supplied refresh token."""
+    """Revoke the current access token and the supplied refresh token."""
+    principal = _principal(request)
     await AuthService().logout(
-        raw_refresh_token=payload.refresh_token, context=AuditContext.from_request(request)
+        raw_refresh_token=payload.refresh_token,
+        context=AuditContext.from_request(request, principal),
+        access_token_jti=principal.jti,
+        access_token_ttl=_remaining_access_ttl(principal),
     )
     return success_response(None, message="Logged out.")
+
+
+@router.post("/logout-all", auth=JWTAuth(), response=BuildResponse[None])
+async def logout_all(request: HttpRequest) -> BuildResponse[None]:
+    """Revoke all access and refresh tokens for the current user."""
+    principal = _principal(request)
+    await AuthService().logout_all(
+        user_id=principal.user_id,
+        context=AuditContext.from_request(request, principal),
+    )
+    return success_response(None, message="Logged out from all sessions.")
 
 
 @router.get("/me", auth=JWTAuth(), response=BuildResponse[MeOut])

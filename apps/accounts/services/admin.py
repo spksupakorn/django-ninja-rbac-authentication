@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from django.conf import settings
 from django.db import IntegrityError
+from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.accounts.repositories.users import UserRepository
@@ -15,6 +17,7 @@ from apps.audit.repositories import AuditRepository
 from apps.audit.services import AuditService
 from apps.authz.models import Permission, Role
 from apps.authz.repositories.rbac import AuthzRepository
+from apps.authz.security.blocklist import BlocklistService
 from apps.authz.security.passwords import hash_password
 from apps.authz.services.auth import AuthService
 from apps.common.exceptions import EmailAlreadyExists, ResourceNotFound
@@ -31,10 +34,14 @@ class AdminService:
         auth: AuthService | None = None,
         audit: AuditService | None = None,
         audit_records: AuditRepository | None = None,
+        blocklist: BlocklistService | None = None,
     ) -> None:
         self.users = users or UserRepository()
         self.authz = authz or AuthzRepository()
-        self.auth = auth or AuthService(users=self.users, authz=self.authz)
+        self.blocklist = blocklist or BlocklistService()
+        self.auth = auth or AuthService(
+            users=self.users, authz=self.authz, blocklist=self.blocklist
+        )
         self.audit = audit or AuditService()
         self.audit_records = audit_records or AuditRepository()
 
@@ -128,6 +135,12 @@ class AdminService:
             raise EmailAlreadyExists() from exc
         if user is None:
             raise ResourceNotFound("User not found.")
+        if is_active is False:
+            await self.blocklist.revoke_user(
+                user.id,
+                timezone.now(),
+                ttl=_access_token_ttl_seconds(),
+            )
         await self.audit.record(
             AuditAction.USER_UPDATE,
             context=context,
@@ -162,3 +175,8 @@ class AdminService:
             target_id=user_id,
             metadata={"role_id": role.id, "role_name": role.name},
         )
+
+
+def _access_token_ttl_seconds() -> int:
+    """Return the maximum useful Redis lifetime for access-token revocations."""
+    return max(1, int(settings.ACCESS_TOKEN_LIFETIME.total_seconds()))
