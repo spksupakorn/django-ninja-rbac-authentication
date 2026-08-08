@@ -1,11 +1,22 @@
 """Administrative RBAC catalog endpoints."""
 
+from datetime import datetime
+
 from django.http import HttpRequest
-from ninja import Router
+from ninja import Query, Router
 
 from apps.accounts.services.admin import AdminService
+from apps.audit.actions import AuditAction
+from apps.audit.models import AuditLog
 from apps.authz.api.auth import JWTAuth, require_permission
-from apps.authz.api.schemas import PermissionOut, PermissionsPageOut, RoleOut, RolesPageOut
+from apps.authz.api.schemas import (
+    AuditLogOut,
+    AuditLogsPageOut,
+    PermissionOut,
+    PermissionsPageOut,
+    RoleOut,
+    RolesPageOut,
+)
 from apps.authz.models import Permission, Role
 from apps.common.api.schemas import BuildResponse, success_response
 
@@ -18,6 +29,22 @@ def _role_out(role: Role) -> RoleOut:
 
 def _permission_out(permission: Permission) -> PermissionOut:
     return PermissionOut.model_validate(permission)
+
+
+def _audit_log_out(audit_log: AuditLog) -> AuditLogOut:
+    return AuditLogOut(
+        id=audit_log.id,
+        created_at=audit_log.created_at,
+        action=audit_log.action,
+        actor_id=audit_log.actor_id,
+        actor_email=audit_log.actor_email,
+        target_type=audit_log.target_type,
+        target_id=audit_log.target_id,
+        outcome=audit_log.outcome,
+        ip=audit_log.ip,
+        user_agent=audit_log.user_agent,
+        metadata=audit_log.metadata,
+    )
 
 
 def _pagination(offset: int, limit: int) -> tuple[int, int]:
@@ -63,4 +90,39 @@ async def list_permissions(
             limit=limit,
         ),
         message="Permissions fetched.",
+    )
+
+
+@router.get("/audit-logs", auth=JWTAuth(), response=BuildResponse[AuditLogsPageOut])
+@require_permission("audit.read")
+async def list_audit_logs(
+    request: HttpRequest,
+    offset: int = 0,
+    limit: int = 20,
+    actor_id: int | None = None,
+    action: AuditAction | None = None,
+    outcome: str | None = None,
+    from_at: datetime | None = Query(None, alias="from"),  # type: ignore[type-arg]  # noqa: B008
+    to_at: datetime | None = Query(None, alias="to"),  # type: ignore[type-arg]  # noqa: B008
+) -> BuildResponse[AuditLogsPageOut]:
+    """List audit records with pagination and investigation filters."""
+    del request
+    offset, limit = _pagination(offset, limit)
+    audit_logs, total = await AdminService().list_audit_logs(
+        offset=offset,
+        limit=limit,
+        actor_id=actor_id,
+        action=str(action) if action is not None else None,
+        outcome=outcome,
+        from_at=from_at,
+        to_at=to_at,
+    )
+    return success_response(
+        AuditLogsPageOut(
+            items=[_audit_log_out(audit_log) for audit_log in audit_logs],
+            total=total,
+            offset=offset,
+            limit=limit,
+        ),
+        message="Audit logs fetched.",
     )

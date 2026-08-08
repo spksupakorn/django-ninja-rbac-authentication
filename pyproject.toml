@@ -57,7 +57,7 @@ ignore_missing_imports = true
 
 [tool.coverage.run]
 branch = true
-source = ["apps.accounts.services", "apps.authz.services", "apps.authz.security"]
+source = ["apps.accounts.services", "apps.authz.services", "apps.authz.security", "apps.audit.services"]
 
 [tool.coverage.report]
 fail_under = 90

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
+from ipaddress import ip_network
 from pathlib import Path
 from typing import Final
 
@@ -49,6 +50,9 @@ class Settings(BaseSettings):
     default_user_role: str = Field(default="user", validation_alias="DEFAULT_USER_ROLE")
     throttle_login: str = Field(default="5/minute", validation_alias="THROTTLE_LOGIN")
     allowed_hosts: list[str] = Field(default_factory=list, validation_alias="ALLOWED_HOSTS")
+    trusted_proxy_cidrs: list[str] = Field(
+        default_factory=list, validation_alias="TRUSTED_PROXY_CIDRS"
+    )
 
     @field_validator("database_url")
     @classmethod
@@ -81,6 +85,19 @@ class Settings(BaseSettings):
             return value
         return [host.strip() for host in value.split(",") if host.strip()]
 
+    @field_validator("trusted_proxy_cidrs", mode="before")
+    @classmethod
+    def validate_trusted_proxy_cidrs(cls, value: str | list[str]) -> list[str]:
+        cidrs = value if isinstance(value, list) else [item.strip() for item in value.split(",")]
+        valid_cidrs = [cidr for cidr in cidrs if cidr]
+        try:
+            for cidr in valid_cidrs:
+                ip_network(cidr, strict=False)
+        except ValueError as exc:
+            msg = "TRUSTED_PROXY_CIDRS must contain valid IPv4 or IPv6 CIDRs"
+            raise ValueError(msg) from exc
+        return valid_cidrs
+
     @model_validator(mode="after")
     def validate_distinct_secrets(self) -> Settings:
         if self.django_secret_key.get_secret_value() == self.jwt_secret.get_secret_value():
@@ -112,6 +129,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "apps.accounts",
     "apps.authz",
+    "apps.audit",
     "apps.common",
 ]
 
@@ -155,6 +173,7 @@ JWT_SECRET = settings.jwt_secret
 ACCESS_TTL = settings.access_ttl
 REFRESH_TTL = settings.refresh_ttl
 DEFAULT_USER_ROLE = settings.default_user_role
+TRUSTED_PROXY_CIDRS = settings.trusted_proxy_cidrs
 THROTTLE_LOGIN = settings.throttle_login
 ACCESS_TOKEN_LIFETIME = settings.access_ttl
 REFRESH_TOKEN_LIFETIME = settings.refresh_ttl

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from uuid import UUID, uuid4
 
 from django.conf import settings
@@ -13,6 +13,9 @@ from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.accounts.repositories.users import UserRepository
+from apps.audit.actions import AuditAction
+from apps.audit.context import AuditContext
+from apps.audit.services import AuditService
 from apps.authz.repositories.rbac import AuthzRepository
 from apps.authz.repositories.refresh_tokens import RefreshTokenRepository
 from apps.authz.security.jwt import encode_access_token
@@ -42,12 +45,21 @@ class AuthService:
         users: UserRepository | None = None,
         authz: AuthzRepository | None = None,
         refresh_tokens: RefreshTokenRepository | None = None,
+        audit: AuditService | None = None,
     ) -> None:
         self.users = users or UserRepository()
         self.authz = authz or AuthzRepository()
         self.refresh_tokens = refresh_tokens or RefreshTokenRepository()
+        self.audit = audit or AuditService()
 
-    async def register(self, *, email: str, password: str) -> User:
+    async def register(
+        self,
+        *,
+        email: str,
+        password: str,
+        context: AuditContext,
+        record_registration: bool = True,
+    ) -> User:
         """Register a user and assign the configured default role."""
         default_role = await self.authz.aget_role_by_name(settings.DEFAULT_USER_ROLE)
         if default_role is None:
@@ -55,21 +67,34 @@ class AuthService:
 
         password_hash = await hash_password(password)
         try:
-            return await self.authz.acreate_user_with_role(
+            user = await self.authz.acreate_user_with_role(
                 email=email, password_hash=password_hash, role_id=default_role.id
             )
         except IntegrityError as exc:
             raise EmailAlreadyExists() from exc
+        if record_registration:
+            await self.audit.record(AuditAction.REGISTER, context=_context_for_user(context, user))
+        return user
 
-    async def login(self, *, email: str, password: str) -> TokenPair:
+    async def login(self, *, email: str, password: str, context: AuditContext) -> TokenPair:
         """Verify credentials and issue a new refresh-token family."""
         user = await self.users.aget_by_email(email)
         is_valid = await verify_password(password, user.password if user else None)
         if user is None or not user.is_active or not is_valid:
+            await self.audit.record(
+                AuditAction.LOGIN_FAILURE,
+                context=context,
+                outcome="failure",
+                metadata={"email": email},
+            )
             raise InvalidCredentials()
-        return await self._issue_token_pair(user_id=user.id, family_id=uuid4(), parent_id=None)
+        token_pair = await self._issue_token_pair(
+            user_id=user.id, family_id=uuid4(), parent_id=None
+        )
+        await self.audit.record(AuditAction.LOGIN_SUCCESS, context=_context_for_user(context, user))
+        return token_pair
 
-    async def refresh(self, *, raw_refresh_token: str) -> TokenPair:
+    async def refresh(self, *, raw_refresh_token: str, context: AuditContext) -> TokenPair:
         """Rotate a refresh token, revoking its full family on detected reuse."""
         now = timezone.now()
         replacement_refresh_token = secrets.token_urlsafe(48)
@@ -80,6 +105,13 @@ class AuthService:
             rotated_at=now,
         )
         if rotation.outcome == "reused":
+            if rotation.refresh_token is not None:
+                await self.audit.record(
+                    AuditAction.TOKEN_REUSE_DETECTED,
+                    context=replace(context, actor_id=rotation.refresh_token.user_id),
+                    outcome="failure",
+                    metadata={"family_id": str(rotation.refresh_token.family_id)},
+                )
             raise TokenReused()
         if rotation.outcome in {"missing", "expired"}:
             raise InvalidToken()
@@ -88,7 +120,7 @@ class AuthService:
 
         roles = await self.authz.aget_user_role_names(rotation.refresh_token.user_id)
         permissions = await self.authz.aget_user_permission_codes(rotation.refresh_token.user_id)
-        return TokenPair(
+        token_pair = TokenPair(
             access_token=encode_access_token(
                 subject=rotation.refresh_token.user_id,
                 roles=roles,
@@ -96,13 +128,24 @@ class AuthService:
             ),
             refresh_token=replacement_refresh_token,
         )
+        await self.audit.record(
+            AuditAction.TOKEN_REFRESHED,
+            context=replace(context, actor_id=rotation.refresh_token.user_id),
+            metadata={"family_id": str(rotation.refresh_token.family_id)},
+        )
+        return token_pair
 
-    async def logout(self, *, raw_refresh_token: str) -> None:
+    async def logout(self, *, raw_refresh_token: str, context: AuditContext) -> None:
         """Revoke one refresh token; unknown tokens make logout idempotent."""
         token_hash = _hash_refresh_token(raw_refresh_token)
         refresh_token = await self.refresh_tokens.aget_by_hash(token_hash)
         if refresh_token is not None:
             await self.refresh_tokens.arevoke(refresh_token.id, timezone.now())
+            await self.audit.record(
+                AuditAction.LOGOUT,
+                context=replace(context, actor_id=refresh_token.user_id),
+                metadata={"family_id": str(refresh_token.family_id)},
+            )
 
     async def aget_active_email(self, user_id: int) -> str:
         """Return the identity's email, rejecting tokens for deleted users."""
@@ -137,3 +180,8 @@ class AuthService:
 def _hash_refresh_token(raw_refresh_token: str) -> str:
     """Return the fixed-size, one-way database representation of a token."""
     return hashlib.sha256(raw_refresh_token.encode("utf-8")).hexdigest()
+
+
+def _context_for_user(context: AuditContext, user: User) -> AuditContext:
+    """Keep the request data while snapshotting the actor that just authenticated."""
+    return replace(context, actor_id=user.id, actor_email=user.email)

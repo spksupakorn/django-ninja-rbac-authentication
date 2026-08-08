@@ -4,6 +4,7 @@ from django.http import HttpRequest
 from ninja import Router, Status
 
 from apps.accounts.models import User
+from apps.audit.context import AuditContext
 from apps.authz.api.auth import JWTAuth, Principal
 from apps.authz.api.schemas import (
     LoginIn,
@@ -39,32 +40,40 @@ async def register(
     request: HttpRequest, payload: RegisterIn
 ) -> Status[BuildResponse[UserOut]]:
     """Register an account with the default RBAC role."""
-    del request
-    user = await AuthService().register(email=str(payload.email), password=payload.password)
+    user = await AuthService().register(
+        email=str(payload.email),
+        password=payload.password,
+        context=AuditContext.from_request(request),
+    )
     return Status(201, success_response(_user_out(user), code=201, message="User registered."))
 
 
 @router.post("/login", response=BuildResponse[TokenPairOut], throttle=LoginRateThrottle())
 async def login(request: HttpRequest, payload: LoginIn) -> BuildResponse[TokenPairOut]:
     """Authenticate an account and issue an access/refresh pair."""
-    del request
-    token_pair = await AuthService().login(email=str(payload.email), password=payload.password)
+    token_pair = await AuthService().login(
+        email=str(payload.email),
+        password=payload.password,
+        context=AuditContext.from_request(request),
+    )
     return success_response(_token_pair_response(token_pair), message="Authenticated.")
 
 
 @router.post("/refresh", response=BuildResponse[TokenPairOut], throttle=LoginRateThrottle())
 async def refresh(request: HttpRequest, payload: RefreshIn) -> BuildResponse[TokenPairOut]:
     """Rotate a refresh token and issue a new access/refresh pair."""
-    del request
-    token_pair = await AuthService().refresh(raw_refresh_token=payload.refresh_token)
+    token_pair = await AuthService().refresh(
+        raw_refresh_token=payload.refresh_token, context=AuditContext.from_request(request)
+    )
     return success_response(_token_pair_response(token_pair), message="Token refreshed.")
 
 
 @router.post("/logout", response=BuildResponse[None])
 async def logout(request: HttpRequest, payload: LogoutIn) -> BuildResponse[None]:
     """Revoke the supplied refresh token."""
-    del request
-    await AuthService().logout(raw_refresh_token=payload.refresh_token)
+    await AuthService().logout(
+        raw_refresh_token=payload.refresh_token, context=AuditContext.from_request(request)
+    )
     return success_response(None, message="Logged out.")
 
 

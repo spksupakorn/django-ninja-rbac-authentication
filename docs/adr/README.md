@@ -13,6 +13,7 @@
 | [0004](0004-custom-user-email-login.md) | Custom User model, email เป็น identity | Accepted |
 | [0005](0005-async-runtime-and-tooling.md) | Async Django Ninja + uv + Docker Compose + pydantic-settings | Accepted |
 | [0006](0006-login-security-hardening.md) | Argon2 + rate limiting ตอน login | Accepted |
+| [0007](0007-audit-log-strategy.md) | Audit log: security+admin events, service-emit, append-only | Accepted |
 
 ## Phase 1 Scope
 
